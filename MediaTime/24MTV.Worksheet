@@ -1,0 +1,36 @@
+
+#########################################################################
+#
+# 24MTV
+# flags: MAKINGTV(TrueVision) MAKINGROPS(MediaTime)
+#########################################################################
+#execute {MPW}Aztec3.6:AztecStartup
+C -E200 "+BU" "+2" Lane2Lane3tail.c
+C -dMAKINGROPS=1 -dMAKINGTV=0 -E200 "+BU" "+2" 24MTVbm.c
+ln 24MTVbm.o "+d" -o 24MTVbm.ROM
+delete 24MTVbm.o
+s1tool 24MTVbm.ROM -b -27256
+# - Base: 000000   Code: 000b6a  Data: 000000  Udata: 000000  Total: 000b6a
+# - Byte count = 2922
+# - Starting at = 0000
+C -dMAKINGROPS=1 -dMAKINGTV=0 -E200 "+BU" "+2" "+I{AZTEC}azAll:all.h" 24MTVw.c
+ln 24MTVw.o "+d" -o 24MTV.ROM -lc Lane2Lane3tail.o
+delete 24MTVw.o
+s1tool 24MTV.ROM
+# - Base: 000000   Code: 006b14  Data: 000000  Udata: 000000  Total: 006b14
+# - Byte count = 27412
+# - Starting at = 14EC
+# send to PROMice EPROM Emulator
+LoadICE -b 19200 -v -h -f xff -r 27256 -w 16  -l -s x8000 24MTV.ROM.S1.32K
+LoadICE -b 19200 -v -h        -r 27256 -w 16  -l -s x8000 24MTVbm.ROM.S1.32K
+mm32 -32 fdfffffc -c=40 -i=-1
+DownLoad256 24MTV.ROM.S1.32K
+DownLoadbm256 24MTVbm.ROM.S1.32K
+beep
+beep
+#Burn even - U13B
+modem -b9 -n "PP:4000,7FFF,0,2"
+#Burn odd - U13A
+modem -b9 -n "PP:4000,7FFF,1,2"
+#########################################################################
+mm32 feffff00 -c=64 -i=1 -32### MPW Shell - /s must occur in pairs.
