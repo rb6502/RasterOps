@@ -1,0 +1,674 @@
+;
+;	File:		DepVideoEqu.a
+;
+;	Contains:	Equates for the DAFB ’040 PDS Display Card.
+;
+;	Written by: Mike Puckett, July 2, 1991.
+;
+;	Copyright:	© 1991 by Apple Computer, Inc., all rights reserved.
+;
+;	Change History (most recent first):
+;
+;		 <8>	12/18/91	jmp		Added a new baseAddr offset for Kong & Vesuvio on DAFB.
+;		 <7>	11/11/91	jmp		Added the DAFBFlag equates.
+;		 <6>	11/06/91	jmp		Added support for 19” displays.
+;		 <5>	09/18/91	jmp		Added supporting equates for disabling the ECL clock signals in
+;									software.
+;		 <4>	09/17/91	jmp		Added support for “extended no-connect” code and updated some
+;									comments.
+;		 <3>	09/17/91	jmp		Added better support for PAL 16bpp.
+;		 <2>	09/17/91	jmp		Added equates for supporting 16bpp and more intelligently
+;									handling PageMode.
+;		 <1>	09/17/91	jmp		first checked in
+;-------------------------------------------------------------
+;			General Macros
+;-------------------------------------------------------------
+;
+							Macro
+							DateStr
+							Dc.b	'&SYSDATE'
+							EndM
+							
+;-------------------------------------------------------------
+;			Misc Equates
+;-------------------------------------------------------------
+;
+; Various driver equates…
+;
+CurDAFBDrvrVersion	 		Equ			$0101					; Version 1.0.
+DAFB1Vers				 	Equ			$00						; DAFB 1:  Original hardware release.
+DAFB2Vers		 	 		Equ			$01						; DAFB 2:  Fix for NTSC & PAL 1,2 bpp modes.
+DAFB3Vers					Equ			$02						; DAFB 3:  Support for AC842A (16bpp ACDC).
+indexEntries				Equ			-1						; -1 mode for Get/SetEntries.
+; Various extra Control/Status calls used by the DAFB ’040 PDS Display Card
+;
+cscSyncOnGreen				Equ			128						; For enabling/disabling sync on green.
+cscPageMode					Equ			130						; For enabling/disabling page mode.
+cscNoConnect				Equ			131						; For enabling sRsrcs on no-connect.
+; Framebuffer equates…
+;
+kMegRAM						Equ			$100000					; Constant for 1Mb.
+k1536KvRAM					Equ			$180000					; Constant for 1.5Mb		
+k256KvRAM					Equ			(256*1024)				; Constant for 256Kb.
+k512KvRAM					Equ			(512*1024)				; Constant for 512Kb.
+k1MvRAM						Equ			(1024*1024) 			; Constant for 1MB.
+k2MvRAM						Equ			2*k1MvRAM				; Constant for 2MB.
+; Apple supports several displays that are in the “extended” sense line range.  Since the raw
+; values that come back from doing the extended sense-line algorithm do not map into a nice
+; tablular form like the “normal” sense line codes do, we map the few extended-sense-line displays
+; that we support into the bottom of the normal sense line table.
+;
+; Notes:  The “normal” sense displays fall in the range of 0..7, where 7 means “go try the
+;		  extended sense codes.”  So, we map the extended sense codes from 8 (yeah, we have
+;		  blank entry).
+;
+extendedNoConnect			Equ			$3F						; Raw Extended Sense for no connect.
+indexedNoConnect			Equ			7						; (Here for consistency only.)
+extendedSensePALBox			Equ			$00						; Raw Extended Sense for PAL Encoder.
+extendedSenseNTSC			Equ			$14						; Raw Extended Sense for NTSC Encoder.
+extendedSenseVGA			Equ			$17						; Raw Extended Sense for VGA.
+extendedSenseGF				Equ			$2D						; Raw Extended Sense for GoldFish.
+extendedSensePAL			Equ			$30						; Raw Extended Sense for PAL.
+extendedSense19				Equ			$3A						; Raw Extended Sense for 19” Displays.
+doExtendedSense				Equ		 	 7						; “Normal” Sense no connect.
+indexedSenseRGB2P			Equ		 	 0						; Standard indexed sense codes.
+indexedSenseFP				Equ			 1						; 
+indexedSenseRubik			Equ			 2						;
+indexedSense2P				Equ		 	 3						; 
+indexedSenseNTSC			Equ			 4						;
+indexedSenseRGBFP			Equ			 5						; 
+indexedSenseHR				Equ		 	 6						; 
+indexedSenseVGA				Equ		 	 8						; Mapped indexed sense codes.
+indexedSensePAL				Equ		 	 9						; 
+indexedSenseGF				Equ			10						; 
+indexedSense19				Equ			11						;
+; QuickDraw and QuickDraw-like constants
+;
+IndexedBlack				Equ			-1						; Black for indexed modes.
+DirectBlack					Equ		 	 0						; Black for direct modes.
+IndexedWhite				Equ			 0						; White for indexed modes.
+DirectWhite					Equ			-1						; White for direct modes.
+OneBitGray					Equ			$AAAAAAAA
+TwoBitGray					Equ			$CCCCCCCC
+FourBitGray					Equ			$F0F0F0F0
+EightBitGray				Equ			$FF00FF00
+SixteenBitGray				Equ			$0000FFFF
+ThirtyTwoBitGray			Equ			$00000000
+defVersion					Equ			0						; QuickDraw (format) version
+defPixelType				Equ			0						; pixeltype=chunky
+chunkyDirect				Equ			16						; pixelType=chunkyDirect
+defCmpCount					Equ			1						; Number of components in pixel
+defmPlaneBytes				Equ			0						; Offset from one plane to the next
+defmDevType					Equ			clutType				; clutType = 0
+defMinorBase				Equ			0						; Video RAM Offset is 0
+; Slot pRAM
+;
+; Slot pRam is used in various ways.  The first two bytes are used by the Slot Manager to record
+; the slot’s boardID.  The remaining bytes are left undefined by the Slot Manager.  The DAFB
+; ’040 PDS Display Card uses Slot pRam as follows:
+;
+SP_Params					Record		0
+SP_BoardID					Ds.w		1						; BoardID.
+SP_Depth					Ds.b		1						; spID of Depth (Mode).						(vendorUse1)
+SP_LastConfig				Ds.b		1						; spID of last boot-up configuration.		(vendorUse2)
+SP_DfltConfig				Ds.b		1						; spID of default configuration.			(vendorUse3)
+SP_MonID					Ds.b		1						; Sense code of last display.				(vendorUse4)
+SP_Flags					Ds.b		1						; Various flags.							(vendorUse5)
+SP_NoConnect				Ds.b		1						; Sense ID of monitor to use on no-connect	(vendorUse6)
+SP_Size						Equ			*
+							Endr
+					
+; Slot pRAM flags
+;
+spSyncOnGreen				Equ			0						; True if we’re supposed to put sync on green.
+spPageMode					Equ			1						; True if we’re enabling DAFB’s PageMode.
+; Slot pRAM no-connect masks
+;
+spNCValidMask				Equ			$40						; Upper two bits must be valid in order to use lower six.
+spNoConnectMask				Equ			$3F						; Lower six bits comprise the sense code.
+; Flags within GFlags word.
+;
+GrayFlag					Equ			15						; luminance mapped if GFlags(GrayFlag) = 1
+IntDisFlag					Equ			14						; interrupts disabled if GFlags(IntFlag) =1
+IsMono						Equ			13						; true if monochrome only display (Portrait)
+UseSeq						Equ			12						; true if sequence mode SetEntries
+UseTrans					Equ			12						; True if we’re supposed to translate 5-bit into 8 (DAFB 16bpp).
+Is16						Equ			11						; true if 16Mhz (Slow) CPU
+IsSlow						Equ			11						; True if Slow CPU (for DAFB, 25Mhz is slow).
+IsDirect					Equ			10						; true if direct video mode, else chunkyIndexed
+PsuedoIndex					Equ			 9						; true if SetEntries request was mapped to indexed from sequential
+																;	(due to screen depth hardware requirements)
+SyncOnGreen					Equ			 8						; True if we’re supposed to put sync on green (DAFB).
+;-------------------------------------------------------------
+;			DeclRom Equates
+;-------------------------------------------------------------
+;
+seSuccess					Equ			$01						; Successful sExec.
+sRsrcBoard					Equ			$01						; Standard place to put the board sRsrc.
+sVidParmDir					Equ			$7E						; A great place to store data (spID off board sRsrc).
+;jwh	dafbBoardID					Equ			$0037					; These have been registered thru
+;jwh	drHwDAFBPDS					Equ			$001F					; 	MacDTS.
+RasterOps24MxQBoardID		Equ			$0037					; These have been registered thru		jwh
+drHwRasterOps24MxQ			Equ			$001F					; 	MacDTS.								jwh
+ROMSize						Equ			$8000					; The DAFB PDS ROM is 32K.
+Revision					Equ			$01						; Only #’s 1-9 are valid.
+ByteLanes					Equ			$E1						; ByteLane 0 for DAFB PDS.
+;-------------------------------------------------------------
+;			Functional sRsrc IDs
+;-------------------------------------------------------------
+;
+sRsrc_Vid_DAFB_RGB2Pa		Equ			$80						; Vesuvio (1,2,4,8).
+sRsrc_Vid_DAFB_RGB2Pb		Equ			$81						; Vesuvio (1,2,4,8,16).
+sRsrc_Vid_DAFB_FP			Equ			$82						; Portrait (1,2,4,8).
+sRsrc_Vid_DAFB_GS			Equ			$84						; Rubik (1,2,4,8,16,32).
+sRsrc_Vid_DAFB_2P			Equ			$86						; Kong (1,2,4,8).
+sRsrc_Vid_DAFB_NTSCSTa		Equ			$88						; NTSC safe title (1,2,4,8,16).
+sRsrc_Vid_DAFB_NTSCSTb		Equ			$89						; NTSC safe title (1,2,4,8,16,32).
+sRsrc_Vid_DAFB_NTSCFFa		Equ			$8A						; NTSC full frame (1,2,4,8,16).
+sRsrc_Vid_DAFB_NTSCFFb		Equ			$8B						; NTSC full frame (1,2,4,8,16,32).
+sRsrc_Vid_DAFB_NTSCconvST	Equ			$8C						; NTSC safe title convolved (1,2,4,8).
+sRsrc_Vid_DAFB_NTSCconvFF	Equ			$8E						; NTSC safe title convolved (1,2,4,8).
+sRsrc_Vid_DAFB_RGBFPa		Equ			$90						; RGB Portrait (1,2,4,8).
+sRsrc_Vid_DAFB_RGBFPb		Equ			$91						; RGB Portrait (1,2,4,8,16).
+sRsrc_Vid_DAFB_HRa			Equ			$92						; High-Res (1,2,4,8,16).
+sRsrc_Vid_DAFB_HRb			Equ			$93						; High-Res (1,2,4,8,16,32).
+sRsrc_Vid_DAFB_VGAa			Equ			$94						; VGA (1,2,4,8,16).
+sRsrc_Vid_DAFB_VGAb			Equ			$95						; VGA (1,2,4,8,16,32).
+sRsrc_Vid_DAFB_SVGAa		Equ			$96						; SuperVGA (1,2,4,8,16).
+sRsrc_Vid_DAFB_SVGAb		Equ			$97						; SuperVGA (1,2,4,8,16,32).
+sRsrc_Vid_DAFB_GFa			Equ			$98						; GoldFish (1,2,4,8,16).
+sRsrc_Vid_DAFB_GFb			Equ			$99						; GoldFish (1,2,4,8,16,32).
+sRsrc_Vid_DAFB_PALSTa		Equ			$9A						; PAL safe title (1,2,4,8,16).
+sRsrc_Vid_DAFB_PALSTb		Equ			$9B						; PAL safe title (1,2,4,8,16,32).
+sRsrc_Vid_DAFB_PALFFa		Equ			$9C						; PAL full frame (1,2,4,8,16).
+sRsrc_Vid_DAFB_PALFFb		Equ			$9D						; PAL safe title (1,2,4,8,16,32).
+sRsrc_Vid_DAFB_PALconvST	Equ			$9E						; PAL safe title convolved (1,2,4,8).
+sRsrc_Vid_DAFB_PALconvFF	Equ			$A0						; PAL full frame convolved (1,2,4,8).
+sRsrc_Vid_DAFB_19a			Equ			$A2						; 19” (1,2,4,8).
+sRsrc_Vid_DAFB_19b			Equ			$A3						; 19” (1,2,4,8,16).
+sRsrc_NeverMatch			Equ			$FE						; The “null” sRsrc.
+;-------------------------------------------------------------
+; 			DAFB Hardware Constants
+;-------------------------------------------------------------
+;
+DAFBBase					Equ			$800000					; Offset from $Fs000000 address.
+FrameBase					Equ			-DAFBBase				; Framebuffer is at $Fs000000.
+DAFB_BaseOffset				Equ			$0						; DAFB offset from DAFBBase.
+DAFB_ParmSize				Equ			$5						; Size of DAFB programmed subset.
+DAFB_VidBaseHi				Equ			$0						; DAFB video base address, bits 20:9.
+DAFB_VidBaseLo				Equ			$4						; DAFB video base address, bits 8:5 (4:0 always zero).
+DAFB_RowWords				Equ			$8						; DAFB rowlongs size.
+DAFB_ClkCfg					Equ			$C						; DAFB clock configuration.
+DAFB_Config					Equ			$10						; DAFB general configuration.
+DAFB_BlkWrtEn				Equ			$14						; DAFB block write enable.
+DAFB_PgMdEn					Equ			$18						; DAFB page mode enable.
+DAFB_Sense					Equ			$1C						; DAFB sense line.
+DAFB_Reset					Equ			$20						; DAFB reset control.
+DAFB_SCSIch0				Equ			$24						; Turbo SCSI channel 0 control (not used).
+DAFB_SCSIch1				Equ			$28						; Turbo SCSI channel 1 control (not used).
+DAFB_Test					Equ			$2C						; DAFB test control.
+DAFB_CRB0					Equ			$30						; vRAM Color Register, bank 0.
+DAFB_CRB1					Equ			$34						; vRAM Color Register, bank 1.
+DAFB_CRB2					Equ			$38						; vRAM Color Register, bank 2.
+DAFB_CRB3					Equ			$3C						; vRAM Color Register, bank 3.
+Swatch_BaseOffset			Equ			$100					; Swatch offset from DAFBBase.
+Swatch_BaseOffset1			Equ			$124					; Parameter offset.
+Swatch_ParmSize1			Equ			$12						; Size of Swatch parameter list.
+Swatch_Mode					Equ			$100					; Swatch general control.
+Swatch_IntMsk				Equ			$104					; Swatch interrupt control.
+Swatch_IntStat				Equ			$108					; Swatch interrupt status.
+Swatch_ClrCrsrInt			Equ			$10C					; Swatch clear cursor interrupt (not used in this form).
+Swatch_ClrAnimInt			Equ			$110					; Swatch clear animation interrupt (not used in this form).
+Swatch_ClrVBLInt			Equ			$114					; Swatch clear VBL interrupt (not used in this form).
+Swatch_CrsrLine				Equ			$118					; Swatch cursor interrupt trigger line.
+Swatch_AnimLine				Equ			$11C					; Swatch animation interrupt trigger line.
+Swatch_Test					Equ			$120					; Swatch counter test.
+Swatch_HSyncRegs			Equ			$124					; Swatch horizontal sync registers (set as a group).
+Swatch_HSerr				Equ			$124					;  HSerr
+Swatch_Hlfln				Equ			$128					;  Hlfln
+Swatch_HEq					Equ			$12C					;  HEq
+Swatch_HSP					Equ			$130					;  HSP
+Swatch_HBWay				Equ			$134					;  HBWay
+Swatch_HBrst				Equ			$138					;  HBrst
+Swatch_HBP					Equ			$13C					;  HBP
+Swatch_HAL					Equ			$140					;  HAL
+Swatch_HFP					Equ			$144					;  HFP
+Swatch_HPix					Equ			$148					;  HPix
+Swatch_VSyncRegs			Equ			$14C					; Swatch vertical sync registers (set as a group).
+Swatch_VHLine				Equ			$14C					;  VHLine
+Swatch_VSync				Equ			$150					;  VSync
+Swatch_VBPEq				Equ			$154					;  VBPEq
+Swatch_VBP					Equ			$158					;  VBP
+Swatch_VAL					Equ			$15C					;  VAL
+Swatch_VFP					Equ			$160					;  VFP
+Swatch_VFPEq				Equ			$164					;  VFPEq
+Swatch_TimeAdj				Equ			$168					; Swatch miscellaneous timing adjust.
+Swatch_ActLine				Equ			$16C					; Swatch active video line (read-only).
+ACDC_AddrReg				Equ			$200					; Set position in ACDC internal RAM.
+ACDC_DataReg				Equ			$210					; Read/write data in ACDC internal RAM.
+ACDC_ConfigReg				Equ			$220					; PCBR0/PCBR1 depending on mode.
+ACDC_ParmSize				Equ			$1						; Size of ACDC parameter list.
+Clk_BaseOffset				Equ			$300					; National offset from DAFBBase.
+Clk_ParmSize				Equ			$10 					; Size of National parameter list.
+Misc_ParmSize				Equ			$6						; Just for consistency with other DAFB parms.
+;-------------------------------------------------------------
+; 			DAFB Software Equates, Constants, Macros
+;-------------------------------------------------------------
+;
+; Various DAFB Equates…
+; 
+; The screen clearing code for DAFB is pretty straight forward with a couple of minor wrinkles.  The
+; wrinkles come about because NTSC and PAL support both “safe title” (ST) and “full frame” (FF) display
+; areas.  Since the ST mode is always smaller in area than a display’s FF area, the “non-viewable” area
+; in the ST mode must be “blacked out.”  But, in order to keep the code general, we always try to
+; draw the border.  In order to do this, we must carry around the FF vs. ST information.  The following
+; SC_Params record is where that information is housed.  
+;
+SC_Params			Record	0
+SC_ActiveHeight		Ds.w	1			; Number of rows-1 for active (QD) part of screen
+SC_ActiveWidth		Ds.w	1			; Number of doublelongs-1 (per row) for active part of screen.
+SC_BorderHeight		Ds.w	1			; Number of rows for Top/Bottom section of border.
+SC_BorderWidth		Ds.w	1			; Number of longs-1 for Top/Bottom section of border.
+SC_BorderSide		Ds.w	1			; Number of longs for Left/Right section of border (in Middle).
+SC_SkipFactor		Ds.w	1			; Difference between rowbytes and cleared part of screen.
+SC_BaseOffset		Ds.l	1			; Actual baseOffset (0 for non ST modes).
+SC_Size				Equ		*
+					EndR
+					
+; Instead of burning valuable pRAM to communicate between PrimaryInit/SecondaryInit and the video
+; driver, we use a conviently unused DAFB 12-bit register.
+;
+DAFBFlags			Equ		Swatch_Test	; A conveniently unused DAFB 12-bit register.
+vRamBit0			Equ		 9			; These two bits say whether there is 512K, 1Meg, or 
+vRamBit1			Equ		10			;	2Megs of vRAM associated with DAFB.
+numVRamBits			Equ		 2			; Width for Bfins/Bfext of the vRamBits.
+vRamBits			Equ		31-vRamBit1	; Offset for Bfins/Bfext.
+videoEnabled		Equ		11			; Set if video is actually turned off.
+; DAFB supports a large number of displays, some of which do NOT share the same base address as
+; the others.  The reason for this is due to hardware constraints (e.g., in order to clock the
+; data out fast enough for some large displays and convolved modes, it is necessary to interleave
+; and align vRam).
+;
+DAFBStdOffset		EQU		$1000		; Active video offset from base of frame buffer vRAM for most displays.
+DAFB2POffset		Equ		$0A00		; Active video offset for Vesuvio & Kong.
+DAFBBSOffset		EQU		$0E00		; Active video offset for Goldfish & SuperVGA.
+DAFBNTSCOffset		Equ		$1020		; Active video offset for NTSC Displays.
+DAFBNTSCConvOff		Equ		$1400		; Active video offset for NTSC convolved Displays.
+DAFBPALOffset		Equ		$0E20		; Active video offset for PAL Displays.
+DAFBPALConvOff		Equ		$1420		; Active video offset for PAL convolved Displays.
+; DAFB (extended) sense line equates…
+;
+dafbSenseLineA		Equ		 2			; Numbers for bit I/O on DAFB senselines.
+dafbSenseLineB		Equ		 1			;
+dafbSenseLineC		Equ		 0			;
+dafbAMask			Equ		 3			; Masks for reading/writing DAFB senselines.
+dafbBMask			Equ		 5			;
+dafbCMask			Equ		 6			;
+tristateDAFBSense	Equ		 7			; Value for tri-stating DAFB senselines.
+; Resetting the DAFB is a process that requires 5 steps.  First, the Swatch is released from
+; its reset state.  Then the Swatch reset mode is reassertd and re-released.  Finally,
+; the vRam and video refresh state machines are reset.  The following equates are the masks
+; for setting the right bits in the DAFB reset register.
+;
+dafbReleaseSwatch	Equ		 3			; See comments above.
+dafbReassertSwatch	Equ		 7			;
+dafbReleaseVRamSM	Equ		 2			;
+dafbReleaseVideoSM	Equ		 0			;
+dafbResetIdle		Equ		 7			; Value to idle DAFB reset register.
+dafbDisableSwatch	Equ		 1			; Value to disable Swatch.
+; In order for the ACDC and for the Clock to be programmed correctly, the DAFB_Config
+;	register must be set up for the right CPU clock speed (which just means turning
+;	on the WriteAccess bit in the DAFBConfig register).
+;
+; DAFB supports the fast page mode operation of the VRams.  However, the only place where it
+;	really makes sense to turn this mode on (all the time) is when the VRams are configured
+;	for the row-interleave access (which is generally 640x480 @ 32bpp).  Bit 1 of the
+;	DAFBConfig register is RowInterleave enable/disable bit; it is bit 30 for bit-field
+;	extraction & insertion, and that’s how we use it.
+;
+; Update to above:  It really makes more sense to just turn page mode OFF when the VRams are
+;	configured for word-interleave.
+;
+dafb33MhzConfig		Equ		$00000800
+dafbRowIntBit		Equ		30
+dafbWrdIntBit		Equ		31												
+; We can enable/disable the sync-on-green signal by setting/resetting bit 9 (PIXSEL0) of
+;	the Clock configuration register.  In order to do this without disturbing the other
+;	bit-fields in this register, we use the bit-field insertion instruction; so, bit
+;	9 is bit 22 for Bfins.
+;
+dafbSyncOnGreen		Equ		22
+; Originally, we used the “real” VBL interrupt line for doing VBL interrupts.  However, it
+;	turned out VBL was generated at vSync, and this was way too late in the cycle.  So,
+;	to resolve this problem, we actually use the cursor interrupt line, which we can
+;	program ourselves. 
+dafbIntStatusBit	Equ		2
+dafbDisableVInts	Equ		$0
+dafbEnableVInts		Equ		$4
+; With the AMD-ACDC (AC842A), the ECL clock signals can be enabled and disabled in software.  The
+;	only time we want to disable the ECL clock signals is when the PIXSEL1 (bit 10) of the DAFB clock
+;	configuration register is zero.  In AC842A, bit 4 in PCBR1 selects whether the ECL or LD clock
+;	signals are used.
+acdcPCS				Equ		 4
+dafbPixSel1			Equ		10
+;
+; Macros to support various “weird” ways hardware must be accessed on the DAFB.  
+;
+					
+					Macro
+					DAFB16bpp &bpp								; (A3 is pointing to the DAFBVidPrivates.)
+					Movem.l	A0/D0,-(Sp)							; Save A0/D0.
+					Move.w	&bpp,D0								; Get the current mode (indexed).
+					Cmp.w	#FifthVidMode-FirstVidMode,D0		; If we aren’t doing 16bpp, then
+					Bne.s	@EndDAFB16bpp						;	skip the kludge.
+					Move.l	saveDAFBBase(A3),A0					; Get DAFBBase into A0.
+					Move.l	#1,ACDC_AddrReg(A0)					; Tell ACDC to use PCBR1.
+					Move.l	#$C0,ACDC_ConfigReg(A0)				; Switch to 16bpp.
+					Tst.l	ACDC_AddrReg(A0)					; Read the addr reg to make it stick (AC842A).
+@EndDAFB16bpp		Movem.l	(Sp)+,A0/D0							; Restore A0/D0.				
+					EndMacro
+					
+					Macro
+					DAFBSpeedPI &dafbBase						; (A6 is pointing to the PrimFrame.)
+					Move.l	A0,-(Sp)							; Save A0.
+					Move.l	&dafbBase,A0						; Get DAFBBase into A0.
+					Tst.b	IsSlowClock(A6)						; If CPU is running at 25MHz,
+					Bne.s	@EndDAFBSpeedPI						;	then leave alone.
+					Ori.l	#dafb33MhzConfig,DAFB_Config(A0)	; Otherwise, setup for 33Mhz operation.
+@EndDAFBSpeedPI		Move.l	(Sp)+,A0							; Restore A0.
+					EndMacro
+					Macro
+					DAFBSpeedDR &dafbBase						; (A3 is pointing to the DAFBVidPrivates.)
+					Movem.l	A0/D0,-(Sp)							; Save A0/D0.
+					Move.l	&dafbBase,A0						; Get DAFBBase into A0.
+					Move.l	DAFB_Config(A0),D0					; Read the DAFBConfig register.
+					Bfextu	D0{dafbWrdIntBit:1},D0				; If word-interleave is on
+					Bne.s	@DisablePageMode					;	then ALWAYS disable page mode.
+					Tst.b	pageModeSet(A3)						; If we’re not supposed to enable page mode,
+					Beq.s	@CPUSpeed							;	just go on.
+					Moveq	#1,D0								; Otherwise, set up to enable page mode,
+					Bra.s	@HitPageMode						;	and do it.
+@DisablePageMode	Moveq	#0,D0								; Set up to disable page mode, and
+@HitPageMode		Move.l	D0,DAFB_PgMdEn(A0)					;	and do it.
+@CPUSpeed			Btst	#IsSlow,GFlags(A3)					; If CPU is running at 25MHz,
+					Bne.s	@EndDAFBSpeedDR						;	then leave alone.
+					Ori.l	#dafb33MhzConfig,DAFB_Config(A0)	; Otherwise, setup for 33Mhz operation.
+@EndDAFBSpeedDR		Movem.l	(Sp)+,A0/D0							; Restore A0/D0.
+					EndMacro
+					Macro
+					DAFBIdle &dafbBase
+					Movem.l	A0/D0,-(Sp)							; Save A0/D0.
+					Move.l	&dafbBase,A0						; Get DAFBBase into A0.
+					Move.l	DAFBFlags(A0),D0					; Get the DAFBFlags.
+					Bclr	#videoEnabled,D0					; Reset the video-is-enabled bit.
+					Move.l	D0,DAFBFlags(A0)					; Write it out.
+					Clr.l	DAFB_ClkCfg(A0)						; Shut off ACDC clock.
+					Clr.l	DAFB_Config(A0)						; Shut off ACDC refresh.
+					Move.l	#dafbDisableSwatch,Swatch_Mode(A0)	; Shut off Swatch.
+					Clr.l	ACDC_AddrReg(A0)					; Tell ACDC to use PCBR0.
+					Move.l	#6,ACDC_ConfigReg(A0)				; Put ACDC in indirect mode.
+					Move.l	#1,ACDC_AddrReg(A0)					; Tell ACDC to use PCBR1.
+					Clr.l	ACDC_ConfigReg(A0)					; Put PCBR1 in compatible mode.
+					Clr.l	ACDC_AddrReg(A0)					; Use PCBR0 again.
+					Clr.l	ACDC_ConfigReg(A0)					; Reset it.
+					Movem.l	(Sp)+,A0/D0							; Restore A0/D0.
+					EndMacro
+					
+					Macro
+					DAFBResetDelay &dafbBase
+					Movem.l	A0/D0,-(Sp)							; Save A0/D0.
+					Move.l	&dafbBase,A0						; Get DAFBBase into A0.
+					Adda.l	#DAFB_Test,A0						; Add in offset to test register.
+					Moveq	#3,D0								; Set up loop counter.
+@DelayLoop			Tst.l	(A0)								; Delay for 100 to 120 ns, and
+					Dbra	D0,@DelayLoop						;	and loop until done.
+					Movem.l	(Sp)+,A0/D0							; Restore A0/D0.
+					EndMacro									;
+					
+					Macro
+					DAFBReset &dafbBase
+					Movem.l	A0/D0,-(Sp)							; Save A0/D0.
+					Move.l	&dafbBase,A0						; Get DAFBBase into A0.
+					Move.l	DAFBFlags(A0),D0					; Get the DAFBFlags.
+					Bset	#videoEnabled,D0					; Set the video-is-enabled bit.
+					Move.l	D0,DAFBFlags(A0)					; Write it out.
+					Adda.l	#DAFB_Reset,A0						; Add in offset to reset reg.
+					Move.l	#dafbReleaseSwatch,(A0)				; Release swatch from reset.
+					DAFBResetDelay &dafbBase					; Wait.
+					Move.l	#dafbReassertSwatch,(A0)			; Reset Swatch again.
+					DAFBResetDelay &dafbBase					; Wait.
+					Move.l	#dafbReleaseSwatch,(A0)				; Release swatch from reset.
+					DAFBResetDelay &dafbBase					; Wait.
+					Move.l	#dafbReleaseVRamSM,(A0)				; Reset VRam state machine.
+					DAFBResetDelay &dafbBase					; Wait.
+					Move.l	#dafbReleaseVideoSM,(A0)			; Reset Video refresh state machine.
+					DAFBResetDelay &dafbBase					; Wait.
+					Movem.l	(Sp)+,A0/D0							; Restore A0/D0.
+					EndMacro
+					
+					Macro
+					DAFBResetSenseLines &dafbBase
+					Move.l	A0,-(Sp)							; Save A0.
+					Move.l	&dafbBase,A0						; Get DAFBBase into A0.
+					Move.l	#tristateDAFBSense,DAFB_SENSE(A0)	; Tristate DAFB sense lines.
+					DAFBResetDelay &dafbBase					; Wait.
+					Move.l	(Sp)+,A0							; Restore A0.
+					EndMacro
+					
+					Macro
+					DAFBReadSenseLines &dafbBase,&senseLines
+					DAFBResetDelay &dafbBase					; Wait.
+					Move.l	A0,-(Sp)							; Save A0.
+					Clr.l	-(Sp)								; Senseline scratch on stack.
+					Move.l	&dafbBase,A0						; Get DAFBBase into A0.
+					Move.l	DAFB_Sense(A0),(Sp)					; Read the sense lines.
+					Not.b	3(Sp)								; Invert the lines and
+					Andi.b	#7,3(Sp)							; 	 extract lo 3-bits.
+					Move.b	3(Sp),&senseLines					; Return them to caller.
+					DAFBResetSenseLines A0						; Reset the sense lines.
+					Tst.l	(Sp)+								; Restore stack.
+					Move.l	(Sp)+,A0							; Restore A0.
+					EndMacro
+					
+;-------------------------------------------------------------
+; 			Rowbytes, page count, and bounds constants
+;-------------------------------------------------------------
+;
+; Rowbytes for DAFB hardware.
+;
+DAFB_512_RB					Equ			512
+DAFB_576_RB					Equ			576
+DAFB_832_RB					Equ			832
+DAFB_1024_RB				Equ			1024
+DAFB_1152_RB				Equ			1152
+DAFB_1536_RB				Equ			1536
+DAFB_1664_RB				Equ			1664
+DAFB_2048_RB				Equ			2048
+DAFB_2304_RB				Equ			2304
+DAFB_3328_RB				Equ			3328
+DAFB_4096_RB				Equ			4096
+;
+; We just support 1 page for now.
+;
+defPages_DAFB				Equ			1
+;
+; Bounds constants…
+;
+; …for 2-Page (Kong/Vesuvio) displays
+;
+defmBounds_T2P				Equ			0						; top
+defmBounds_L2P				Equ			0						; left
+defmBounds_B2P				Equ			870						; bottom
+defmBounds_R2P				Equ			1152					; right
+; …for the Full Page Display
+;
+defmBounds_TFP				Equ			0						; top
+defmBounds_LFP				Equ			0						; left
+defmBounds_BFP				Equ			870						; bottom
+defmBounds_RFP				Equ			640						; right
+; …for the noninterlaced Apple // GS (Rubik) Monitor
+;
+defmBounds_TGS				Equ			0						; top
+defmBounds_LGS				Equ			0						; left
+defmBounds_BGS				Equ			384						; bottom
+defmBounds_RGS				Equ			512						; right
+; …for NTSC (Full Frame) displays
+;
+defmBounds_TNTSCFF			Equ			0						; top
+defmBounds_LNTSCFF			Equ			0						; left
+defmBounds_BNTSCFF			Equ			480						; bottom
+defmBounds_RNTSCFF			Equ			640						; right
+; …for NTSC (Safe Title) displays
+;
+defmBounds_TNTSCST			Equ			0						; top
+defmBounds_LNTSCST			Equ			0						; left
+defmBounds_BNTSCST			Equ			384						; bottom
+defmBounds_RNTSCST			Equ			512						; right
+; …for the Hi-Res Monitor
+;
+defmBounds_THR				Equ			0						; top
+defmBounds_LHR				Equ			0						; left
+defmBounds_BHR				Equ			480						; bottom
+defmBounds_RHR				Equ			640						; right
+; …for VGA-compatible displays
+;
+defmBounds_TVGA				Equ			0						; top
+defmBounds_LVGA				Equ			0						; left
+defmBounds_BVGA				Equ			480						; bottom
+defmBounds_RVGA				Equ			640						; right
+; …for SuperVGA-compatible displays
+;
+defmBounds_TSVGA			Equ			0						; top
+defmBounds_LSVGA			Equ			0						; left
+defmBounds_BSVGA			Equ			600						; bottom
+defmBounds_RSVGA			Equ			800						; right
+; …for the Goldfish Display
+;
+defmBounds_TGF				Equ			0						; top
+defmBounds_LGF				Equ			0						; left
+defmBounds_BGF				Equ			624						; bottom
+defmBounds_RGF				Equ			832						; right
+; …for PAL (Full Frame) displays
+;
+defmBounds_TPALFF			Equ			0						; top
+defmBounds_LPALFF			Equ			0						; left
+defmBounds_BPALFF			Equ			576						; bottom
+defmBounds_RPALFF			Equ			768						; right
+; …for PAL (Safe Title) displays
+;
+defmBounds_TPALST			Equ			0						; top
+defmBounds_LPALST			Equ			0						; left
+defmBounds_BPALST			Equ			480						; bottom
+defmBounds_RPALST			Equ			640						; right
+; for 19” displays
+;
+defmBounds_T19				Equ			0						; top
+defmBounds_L19				Equ			0						; left
+defmBounds_B19				Equ			768						; bottom
+defmBounds_R19				Equ			1024					; right
+;
+; Screen resolution in dpi (fixed format).
+;
+HRes2P						Equ			$4D0000					; 77 HPixels/inch
+VRes2P						Equ			$4D0000					; 77 VPixels/inch
+HResFP						Equ			$500000					; 80 HPixels/inch
+VResFP						Equ			$500000					; 80 VPixels/inch
+HResGS						Equ			$480000					; 72 HPixels/inch
+VResGS						Equ			$480000					; 72 VPixels/inch
+HResNTSC					Equ			$480000					; 72 HPixels/inch
+VResNTSC					Equ			$480000					; 72 VPixels/inch
+HResHR						Equ			$480000					; 72 HPixels/inch
+VResHR						Equ			$480000					; 72 VPixels/inch
+HResVGA						Equ			$480000					; 72 HPixels/inch
+VResVGA						Equ			$480000					; 72 HPixels/inch
+HResSVGA					Equ			$480000					; 72 HPixels/inch
+VResSVGA					Equ			$480000					; 72 HPixels/inch
+HResGF						Equ			$480000					; 72 HPixels/inch
+VResGF						Equ			$480000					; 72 VPixels/inch
+HResPAL						Equ			$480000					; 72 HPixels/inch
+VResPAL						Equ			$480000					; 72 VPixels/inch
+HRes19						Equ			$480000					; 72 HPixels/inch
+VRes19						Equ			$480000					; 72 VPixels/inch
+;
+; MinorLengths.
+;
+MinorLength_DAFB_2Pa		Equ			(DAFB_1152_RB*defmBounds_B2P)
+MinorLength_DAFB_2Pb		Equ			(DAFB_2304_RB*defmBounds_B2P)
+MinorLength_DAFB_FPa		Equ			(DAFB_1024_RB*defmBounds_BFP)
+MinorLength_DAFB_FPb		Equ			(DAFB_2048_RB*defmBounds_BFP)
+MinorLength_DAFB_GS			Equ			(DAFB_2048_RB*defmBounds_BGS)
+MinorLength_DAFB_NTSCSTa	Equ			(DAFB_1024_RB*defmBounds_BNTSCST)
+MinorLength_DAFB_NTSCSTb	Equ			(DAFB_4096_RB*defmBounds_BNTSCST)
+MinorLength_DAFB_NTSCFFa	Equ			(DAFB_1024_RB*defmBounds_BNTSCFF)
+MinorLength_DAFB_NTSCFFb	Equ			(DAFB_4096_RB*defmBounds_BNTSCFF)
+MinorLength_DAFB_NTSCconvST	Equ			(DAFB_1024_RB*defmBounds_BNTSCST)
+MinorLength_DAFB_NTSCconvFF	Equ			(DAFB_1024_RB*defmBounds_BNTSCFF)
+MinorLength_DAFB_HRa		Equ			(DAFB_1024_RB*defmBounds_BHR)
+MinorLength_DAFB_HRb		Equ			(DAFB_4096_RB*defmBounds_BHR)
+MinorLength_DAFB_VGAa		Equ			(DAFB_1024_RB*defmBounds_BVGA)
+MinorLength_DAFB_VGAb		Equ			(DAFB_4096_RB*defmBounds_BVGA)
+MinorLength_DAFB_SVGAa		Equ			(DAFB_832_RB*defmBounds_BSVGA)
+MinorLength_DAFB_SVGAb		Equ			(DAFB_3328_RB*defmBounds_BSVGA)
+MinorLength_DAFB_GFa		Equ			(DAFB_832_RB*defmBounds_BGF)
+MinorLength_DAFB_GFb		Equ			(DAFB_3328_RB*defmBounds_BGF)
+MinorLength_DAFB_PALSTa		Equ			(DAFB_832_RB*defmBounds_BPALST)
+MinorLength_DAFB_PALSTb		Equ			(DAFB_3328_RB*defmBounds_BPALST)
+MinorLength_DAFB_PALFFa		Equ			(DAFB_832_RB*defmBounds_BPALFF)	
+MinorLength_DAFB_PALFFb		Equ			(DAFB_3328_RB*defmBounds_BPALFF)
+MinorLength_DAFB_PALconvST	Equ			(DAFB_1024_RB*defmBounds_BPALST)
+MinorLength_DAFB_PALconvFF	Equ			(DAFB_1024_RB*defmBounds_BPALFF)
+MinorLength_DAFB_19a		Equ			(DAFB_1024_RB*defmBounds_B19)			
+MinorLength_DAFB_19b		Equ			(DAFB_2048_RB*defmBounds_B19)
+;
+; BaseOffsets.
+;
+defmBaseOffset				Equ			0						; Offset to base of video RAM.
+; For NTSC, we have two sizes:  “Safe Title” (ST) and “Full Frame” (FF), where ST is the
+; smaller size.  Because QuickDraw doesn’t support a changing base address, we have to
+; “lie” to it about where the base address really is.  So, we do this with an offset.
+; To calculate the offset, we do the following.  First, we calculate the horizontal offset.
+; We know that there are 1024 “real” pixels and 640 viewable pixels for NTSCFF.  So, we
+; have (with 512 viewable pixels for NTSCST):
+;
+;           640 - 512 = 128  (difference between FF and ST).
+;			128/2     =  64  (calculate the center).
+;
+; To calculate the vertical offset, we know there are 480 viewable rows for NTSCFF and
+; 384 for NTSCST:
+;
+;			480 - 384 =  96 (difference between FF and ST).
+;			96/2      =  48 (calculate the center).
+;
+; In order to calculate the base offset, we now just multiply the vertical dimension
+; by rowbytes (1024 in 1-8bb, and 4096 in 32bpp), and add in the number of pixels
+; we want per depth (for 1-8bb 64/bpp and 64*4 for 32bpp for rowbytes).
+;
+; Similar logic was used to derive the PAL base address offsets.
+;
+;
+NTSC_RB			Equ			DAFB_1024_RB				; Rowbytes for the indexed modes for NTSC
+PAL_RB			Equ			DAFB_832_RB					;	and PAL.
+PAL_RB_Conv		Equ			DAFB_1024_RB				;
+NTSC_Mid_RB		Equ			DAFB_2048_RB				; Rowbytes for the direct modes for NTSC
+NTSC_Big_RB		Equ			DAFB_4096_RB				;	and PAL.
+PAL_Mid_RB		Equ			DAFB_1664_RB				;
+PAL_Big_RB		Equ			DAFB_3328_RB				;
+defmNTSCSTBase	Equ			(NTSC_RB*48)				; Offset to NTSCST base, 1-8bpp.
+defmNTSCSTB1	Equ			defmNTSCSTBase+(64/8)		; defmNTSCSTBase + 64 pixels (by depth).
+defmNTSCSTB2	Equ			defmNTSCSTBase+(64/4)		;
+defmNTSCSTB4	Equ			defmNTSCSTBase+(64/2)		;
+defmNTSCSTB8	Equ			defmNTSCSTBase+(64/1)		;
+defmNTSCSTB16	Equ			(NTSC_Mid_RB*48)+(64*2)		; 16bpp defmNTSCSTBase + 64 pixels.
+defmNTSCSTB32	Equ			(NTSC_Big_RB*48)+(64*4)		; 32bpp defmNTSCSTBase + 64 pixels.
+defmPALSTBase	Equ			(PAL_RB*48)					; Offset to PALST base, 1-8bb.
+defmPALSTB1		Equ			defmPALSTBase+(64/8)		; defmPALSTBase + 64 pixels (by depth).
+defmPALSTB2		Equ			defmPALSTBase+(64/4)		;
+defmPALSTB4		Equ			defmPALSTBase+(64/2)		;
+defmPALSTB8		Equ			defmPALSTBase+(64/1)		;
+defmPALSTB16	Equ			(PAL_Mid_RB*48)+(64*2)		; 16bpp defmPALSTBase + 64 pixels.
+defmPALSTB32	Equ			(PAL_Big_RB*48)+(64*4)		; 32bpp defmPALSTBase + 64 pixels.
+defmPALSTBConv	Equ			(PAL_RB_Conv*48)			; Offset to PALST base convolved, 1-8bb.
+defmPALSTB1Conv	Equ			defmPALSTBConv+(64/8)		; defmPALSTBConv + 64 pixels (by depth).
+defmPALSTB2Conv	Equ			defmPALSTBConv+(64/4)		;
+defmPALSTB4Conv	Equ			defmPALSTBConv+(64/2)		;
+defmPALSTB8Conv	Equ			defmPALSTBConv+(64/1)		;

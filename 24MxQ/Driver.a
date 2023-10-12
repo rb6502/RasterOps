@@ -1,0 +1,2381 @@
+;
+;	File:		Driver.a
+;
+;	Contains:	The Driver code for the DAFB ’040 PDS Display Card.
+;
+;	Written by: Mike Puckett, July 8, 1991.
+;
+;	Copyright:	© 1991 by Apple Computer, Inc., all rights reserved.
+;
+;	Change History (most recent first):
+;
+;		 <8>	12/18/91	jmp		Eliminated some code in GrayScreen that handled base addresses
+;									that moved across depths, as it is no longer needed.
+;		 <7>	11/11/91	jmp		Cleaned up the SetDefaultMode call.
+;		 <6>	11/06/91	jmp		Added support for 19” displays.
+;		 <5>	09/18/91	jmp		Added support for disabling the ECL clock signals in software
+;									when appropriate.
+;		 <4>	09/17/91	jmp		Removed the “Goodbye Kiss” stuff, added support for the
+;									“extended no-connect”, and fixed a PAL 16bpp typo.
+;		 <3>	09/17/91	jmp		Updated the screen-graying code for 16bpp PAL.
+;		 <2>	09/17/91	jmp		Added support for graying the screen in 16bpp and added code for
+;									more intelligently handling  PageMode.
+;		 <1>	09/17/91	jmp		first checked in
+				BLANKS		ON
+				STRING		ASIS
+				MACHINE		MC68020
+		
+; This is device storage which is stored in the dCtlStorage field of the AuxDCE.
+DAFBVidPrivates	RECORD		0
+saveBaseAddr 	DS.L		1								; the screen base address (NOT ST corrected!)
+saveScreenBase	DS.L		1								; ST corrected version of saveBaseAddr.
+saveSQElPtr 	DS.L		1								; the SQ element pointer (for _SIntRemove)
+saveGammaPtr 	DS.L		1								; the pointer to the Gamma correction table
+saveGamDispPtr	DS.L		1								; the pointer to the Gamma block
+saveVDACBase	DS.L		1								; the base addr of the VDAC
+saveDAFBBase	DS.L		1								; the base addr of the DAFB
+saveVidPtr		DS.L		1								; pointer to a big block of DAFB video parameters
+GFlags			DS.W		1								; flags word
+pageModeSet		Ds.w		1								; true if the pRam PageMode enable bit is set
+saveMode		DS.W		1								; the current mode setting
+saveMonID		DS.W		1								; monitor type ID (indexed, not extended).
+saveSlotId		DS.W		1								; spID of video sRsrc (hi-order byte only!)
+DAFBVidPrivSize	EQU			*
+				ENDR
+;-------------------------------------------------------------------
+;	Video Driver Header
+;-------------------------------------------------------------------
+;		
+DAFBDrvr	
+				DC.W	$4C00								; ctl,status,needsLock
+				DC.W	0,0,0								; not an ornament
+; Entry point offset table
+				DC.W	DAFBVidOpen-DAFBDrvr 				; open routine
+				DC.W	DAFBDrvr-DAFBDrvr					; no prime in normal video drivers
+				DC.W	DAFBVidCtl-DAFBDrvr					; control
+				DC.W	DAFBVidStatus-DAFBDrvr				; status
+				DC.W	DAFBVidClose-DAFBDrvr				; close
+				STRING	Pascal
+DAFBVidTitle
+;jwh				DC.B	'.Display_Video_Apple_DAFB_PDS'		
+				DC.B	'.Display_Video_Apple_RasterOps24MxQ'		; jwh	
+			
+				ALIGN	2									; make sure we're aligned
+				DC.W	CurDAFBDrvrVersion					; current version
+				STRING	ASIS
+;
+; This table simply contains the zero-based maximum index value for each of the depths.  It is
+;	set up to be indexed via the modeID.
+;
+DAFBClutTbl		Dc.b	$01,$03,$0F,$FF,$1F,$FF
+;
+; These are the bit patterns for grays in each depth, except the last one which is the black
+;	“half-pattern” in 32-bit/pixel mode.
+DAFBPats		Dc.l	OneBitGray,TwoBitGray,FourBitGray,EightBitGray,SixteenBitGray,ThirtyTwoBitGray
+;
+; Normally, if no monitor is detected on boot, PrimaryInit just shuts video down.  However,
+;	if the no-connect pRam code is valid, then we things up as if the monitor code
+;	specified in pRam were actually connected.  The DAFBMonIDs table (below) is composed
+;	of the valid monitor IDs supported by DAFB.
+;
+DAFBMonIDs		Dc.w	MonIDSEnd-MonIDsBegin-1
+MonIDsBegin
+				Dc.b	indexedSenseRGB2P,indexedSenseFP,indexedSenseRubik,indexedSense2P
+				Dc.b	indexedSenseNTSC,indexedSenseRGBFP,indexedSenseHR
+				Dc.b	extendedSensePALBox,extendedSenseNTSC,extendedSenseVGA
+				Dc.b	extendedSenseGF,extendedSensePAL,extendedSense19
+MonIDSEnd
+**********************************************************************
+*
+* DAFBVidOpen allocates private storage for the device in the AuxDCE and locks
+*	it down for perpetuity. Also, install the interrupt handler and enable
+*	the interrupts.
+*
+* Entry:	A0 = param block pointer
+*			A1 = AuxDCE pointer
+*
+* Locals:	A3 = pointer to private storage
+*
+**********************************************************************
+				WITH	VDPageInfo,SlotIntQElement,DAFBVidPrivates
+DAFBVidOpen	
+;
+; Allocate private storage (since block is CLEAR, GFlags are zeroed) and get
+;	a pointer to it in A3
+;
+				MOVEQ	#DAFBVidPrivSize,D0					; get size of parameters
+				_ResrvMem ,SYS 								; make room as low as possible
+				MOVEQ	#DAFBVidPrivSize,D0					; get size of parameters
+				_NewHandle ,SYS,CLEAR						; get some memory for private storage
+				BNE   	@OpError1							; => return an error in open
+				MOVE.L	A0,dCtlStorage(A1)					; save returned handle in AuxDCE
+				_HLock										; and lock it down forever
+				
+				MOVE.L	(A0),D0								; get a pointer to it
+				_StripAddress								; clean it up
+				MOVE.L	D0,A3								; get pointer to privates in A3
+;
+; Remember the VDAC and DAFB base addresses since they're hard to look up.  
+;
+				Move.l	#$F0000000,D1						; D1 <- $F0000000.
+				Move.b	dCtlSlot(A1),D0						; D0 <- Slot number, s.
+				Bfins	D0,D1{4:4}							; D1 <- $Fs000000.
+				
+				Move.l	D1,A0								; Copy hardware base.
+				Adda.l	#DAFBBase,A0						; Get DAFBBase.
+				Move.l	A0,saveDAFBBase(A3)					; Save it, and
+				Move.l	A0,saveVDACBase(A3)					; VDAC, too.
+				
+;
+; Also, save the raw base address for the frame buffer.  We’ll correct it a little
+;	later.
+;
+				Move.l	D1,saveBaseAddr(A3)					; Save the framebase.
+;
+; Get and install the interrupt handler.  Call the EnableVGuts utility code to do 
+;	this.  This utility also starts the interrupts going.  If there is an error
+;	condition, EnableVGuts returns with Z-bit cleared.
+			
+				MOVEQ	#sqHDSize,D0						; allocate a slot queue element
+				_NewPtr	,SYS,CLEAR							; get it from system heap cleared
+				BNE   	@OpError2							; if not allocated, return bad
+				MOVE.L	A0,saveSQElPtr(A3)					; save the SQ element pointer.
+	
+				BSR		DAFBEnableVGuts						; do it
+				BNE 	@OpError2							; 
+;
+; Load the default gamma table from the slot resource list.
+;
+				WITH	spBlock
+				
+				SUBA	#spBlockSize,SP						; make a slot parameter block
+				MOVE.L	SP,A0								; get pointer to block in A0
+				MOVE.B	dCtlSlot(A1),spSlot(A0)				; copy the slot number
+				MOVE.B	dCtlSlotId(A1),spID(A0)				; copy the spID of the video sRsrc
+				CLR.B	spExtDev(A0)						; 
+				_sRsrcInfo									; get the spsPointer
+				BNE		@OpError3							; if failed, then quit.
+				
+				MOVE.B	#sGammaDir,spID(A0)					; look for the gamma directory
+				_sFindStruct								; get that baby
+				BNE.S	@DoLinear							; if failed, then do linear
+				
+				MOVE.B	#128,spID(A0)						; get the default gamma table, (always 128)
+				_sGetBlock									; we can use this since we want it on the sys heap
+				BNE.S	@DoLinear							; if failed, then do linear
+			
+; Skip over gamma header.
+			
+				MOVE.L	spResult(A0),A0						; point to head of the block
+				MOVE.L	A0,saveGamDispPtr(A3)				; save the ptr to the gamma block
+				ADDA	#2,A0								; skip resID
+@Name			TST.B	(A0)+								; skip over gamma name
+				BNE.S	@Name								;
+				MOVE.L	A0,D0								; get in d-reg
+				ADDQ	#1,D0								; word align pointer
+				BCLR	#0,D0								; round it off
+				
+				MOVE.L	D0,saveGammaPtr(A3)					; put it in private storage
+				Bra.s	@VidParams							; Jump around linear code.
+			
+;
+; Build a linear default gamma table if necessary.
+;
+@DoLinear
+				Moveq	#gFormulaData,D0					; Get gamma table header size.
+				Add		#256,D0								; Add in one-byte per entry.
+				_NewPtr	,SYS,CLEAR							; Clear it.
+				Bne		@OpError3							; If failed, quit.
+				
+				Move.l	A0,saveGamDispPtr(A3)				; Save head of gamma table for disposal.
+				Move.l	A0,saveGammaPtr(A3)					; Head and top are same here.
+				Move.w	#drHwRasterOps24MxQ,gType(A0)		; Set up gType.		jwh
+				Move.w	#1,gChanCnt(A0)						; Set up gChanCnt.
+				Move.w	#256,gDataCnt(A0)					; Set up gDataCnt.
+				Move.w	#8,gDataWidth(A0)					; Set up gDataWidth.
+				Adda	#gFormulaData+256,A0				; Point to end of data table.
+				Move.w	#255,D0								; Set up loop counter.
+@Loop			Move.b	D0,-(A0)							; Write out value.
+				Dbra	D0,@Loop							; Loop.
+	
+;
+; Get a pointer to the video hardware setup parameter block.  Use this functional spID's spsPointer
+;	found above in the gamma section.
+;
+@VidParams
+				
+				MOVE.L	SP,A0								; point to the spBlock on the stack
+				MOVE.B	dCtlSlot(A1),spSlot(A0)				; copy the slot number
+				MOVE.B	#sRsrcBoard,spID(A0)				; copy the spID of the video sRsrc
+				CLR.B	spExtDev(A0)						; 
+				_sRsrcInfo									; Get the spsPointer.
+				Bne		@OpError4							; If failed, quit.
+	
+				MOVE.B	#sVidParmDir,spID(A0)				; look for the video parameters dir
+				_sFindStruct								; Try to load it.
+				Bne		@OpError4							; If failed, quit.
+	
+				MOVE.B	dCtlSlotId(A1),spID(A0)				; look in the directory for this config's parameters
+				_sGetBlock									; Try to load it.
+				Bne		@OpError4							; If failed, quit.
+				
+				MOVE.L	spResult(A0),saveVidPtr(A3)			; save pointer to it
+				Move.l	spResult(A0),A0						; Get vidParams pointer.
+				Adda.l	#MiscBaseAddr,A0					; Skip past MaxMode(a,b) params.
+				Move.l	(A0),D0								; Get the frame buffer baseoffset,
+				Add.l	D0,saveBaseAddr(A3)					;	and add it to the framebase.
+				
+;
+; At PrimaryInit time, we used the sense lines to determine the type of attached display.  For extended
+;	sense displays, we just mapped them to the end of indexed-sense displays.  Since the gamma-correction
+;	code uses the monitor ID to determine if the passed-in table is applicable, we need to know the “real”
+;	monitor ID.  At PrimaryInit time, we store the real monitor ID in slot pRAM.  So, we extract that
+;	information out here.  Also, it should be noted that it would actually be inappropriate for us
+;	to re-read the sense-lines now, in that someone could potentially change/unplug the attached
+;	display between PrimaryInit and VidOpen, and that would cause us all sorts of havoc.
+;
+				With	SP_Params
+				
+				Move.l	Sp,A0								; Point to spBlock on the stack.
+				Move.b	dCtlSlot(A1),spSlot(A0)				; Put slot into spBlock.
+	
+				Suba	#sizeSPRamRec,Sp					; Allocate an SPRam block on the stack.
+				Move.l	Sp,spResult(A0)						; Point to it.
+				_SReadPRAMRec								; Read Slot PRam.
+				Bne		@OpError5							; If failed quit.
+				
+				Moveq	#0,D3								; Clear D3.w.
+				Moveq	#0,D2								; Clear D2.w.
+				Move.b	SP_Depth(Sp),D3						; Get the mode (it’s byte sized).		
+				Move.b	SP_MonID(Sp),D2						; Get the monID (it’s byte sized).
+				Move.b	SP_Flags(Sp),D1						; Get the flags.
+				
+				Adda	#sizeSPRamRec+spBlockSize,Sp		; Clean up the stack.
+	
+				EndWith
+;
+; Do a little bookkeeping…
+;
+				Move.w	D3,saveMode(A3)						; Save the mode for later.
+				Move.w	D2,saveMonID(A3)					; Save the monID for later.
+				Move.b	dCtlSlotId(A1),saveSlotId(A3)		; Also save the spID.
+				
+				Btst	#spSyncOnGreen,D1					; If we’re not supposed to put sync on green,
+				Beq.s	@CheckPageMode						;	then just go on.
+				Bset	#syncOnGreen,GFlags(A3)				; Otherwise, set the flag.
+								
+@CheckPageMode	Move.l	saveDAFBBase(A3),A4					; Get DAFBBase into A4 for below.
+				Btst	#spPageMode,D1						; If PageMode is supposed to be enabled,
+				Bne.s	@EnablePageMode						;	then say so.
+				Move.b	#0,pageModeSet(A3)					; Otherwise, say page mode is disaabled.
+@EnablePageMode	Move.b	#1,pageModeSet(A3)					; Say page mode is enabled.
+				Move.b	#true32b,D0							; Set up to swap into 32-bit addressing mode.
+				_SwapMMuMode								; Do swap, and
+				Move.b	D0,-(Sp)							; 	save the previous mode.
+				Move.l	DAFB_Config(A4),D0					; Read the DAFBConfig register.
+				Bfextu	D0{dafbWrdIntBit:1},D0				; If word-interleave is on
+				Bne.s	@DisablePageMode					;	then ALWAYS disable page mode.
+				Tst.b	pageModeSet(A3)						; If we’re not supposed to enable page mode,
+				Beq.s	@DisablePageMode					;	then disable it.
+				Moveq	#1,D0								; Otherwise, set up to enable page mode,
+				Bra.s	@HitPageMode						;	and do it.
+@DisablePageMode	
+				Moveq	#0,D0								; Set up to disable page mode, and
+@HitPageMode	Move.l	D0,DAFB_PgMdEn(A4)					;	and do it.
+				Move.l	DAFBFlags(A4),D0					; Get the DAFBFlags.
+				Btst	#videoEnabled,D0					; If video is still enabled,
+				Bne.s	@CalcScrnBase						;	then just go on.
+				
+				Move.w	saveMode(A3),D1						; Otherwise, get the mode into D1.
+				Sub.w	#firstVidMode,D1					; Make it an index.
+				Bsr		DAFBSetDepth						; Set the depth.
+				Bsr		DAFBCalcScreenBaseAddr				; Calculate the new ST-corrected screen baseAddr.
+				Bsr		DAFBGrayScreen						; Paint the screen gray.
+				Bra.s	@SwapBack							; Go on.
+	
+@CalcScrnBase	
+				Move.w	#firstVidMode,saveMode(A3)			; From PrimaryInit, we’re still at 1bpp.
+				Bsr		DAFBCalcScreenBaseAddr				; Save the ST-corrected screen baseAddr.
+@SwapBack				
+				Move.b	(Sp)+,D0							; Set up to switch back into previous mode,
+				_SwapMMUMode								;	and do it.
+;
+; Set GFlags to reflect monochrome-only displays.
+;
+			
+				Cmp.w	#indexedSenseFP,saveMonID(A3)		; If this is a Mono-Only Full Page,
+				Beq.s	@SetMonoFlags						;	then say so.
+				Cmp.w	#indexedSense2P,saveMonID(A3)		; If this is a Mono-Only Two-Page,
+				Beq.s	@SetMonoFlags						;	then say so.				
+				Bra.s	@AllDone							; Otherwise, skip.
+@SetMonoFlags	Bset	#IsMono,GFlags(A3)					; Turn on the IsMono and
+				Bset	#GrayFlag,GFlags(A3)				;	 GrayFlag flags.
+;
+; All done!
+;
+@AllDone		MOVEQ	#noErr,D0							; no error
+@EndOpen		RTS 										; return
+@OpError5		Adda	#sizeSPRamRec,Sp					; Release the SPRam block.
+@OpError4		Move.l	saveGamDispPtr(A3),A0				; Set up to dispose of gamma table.
+				_DisposPtr									; Dispose it.
+@OpError3		ADDA	#spBlockSize,SP						; release the spBlock
+@OpError2		MOVE.L	dCtlStorage(A1),A0					; get the private storage back
+				_DisposHandle								; release the driver private storage
+@OpError1		MOVE.L	#OpenErr,D0							; say can't open driver
+				BRA.S	@EndOpen
+				ENDWITH
+**********************************************************************
+*
+* Video Driver Control Call Handler.  There are 10 standard calls:
+*
+*	($00) Reset (VAR mode, page: INTEGER; VAR BaseAddr: Ptr);
+*	($01) KillIO
+*	($02) SetMode(mode, page: INTEGER; VAR BaseAddr: Ptr);
+*	($03) SetEntries (Table: Ptr; Start,Count : integer );
+*	($04) SetGamma (Table : Ptr );
+*   ($05) GrayPage (page);
+*   ($06) SetGray (csMode = 0 for color, 1 for gray)
+*	($07) SetInterrupt (csMode = 0 for enable, non-zero for disable);
+*	($08) DirectSetEntries (Table: Ptr; Start,Count : integer );
+*	($09) SetDefaultMode (csMode = mode to set);
+*
+* The following calls are DAFB-specific:
+*
+*	($80) SetSyncOnGreen(csMode = 0 for enable, non-zero for disable);
+*	($82) SetPageMode(csMode = 0 for enable, non-zero for disable);
+*	($83) SetNoConnect(csMode = monitor ID to set)
+*
+*   Entry: 	A0 		= param block pointer
+*			A1 		= AuxDCE pointer
+*	Uses:	A2		= cs parameters (ie. A2 <- csParam(A0))  (must be preserved)
+*			A3 		= ptr to our privates/scrarch (doesn’t need to be preserved)
+*			A4		= scratch (must be preserved)
+*			D0-D3 	= scratch (don't need to be preserved)
+*
+*	Exit:	D0	  	= error code
+*
+**********************************************************************
+;
+; Decode the call…
+;
+DAFBVidCtl	
+			
+				MOVEM.L	A0/A1,-(SP)							; Save exit registers.
+				MOVE.L	csParam(A0),A2						; A2 <- Ptr to control parameters
+						
+				MOVE.L	dCtlStorage(A1),A3					; A3 <- Ptr to private storage
+				MOVE.L	(A3),D0								;
+				_StripAddress								;
+				MOVE.L	D0,A3								;
+				MOVE.W	csCode(A0),D0						; get routine selector
+				
+				Cmp.w	#cscSyncOnGreen,D0					; If we got the SetSyncOnGreen call,
+				Beq		DAFBSetSyncOnGreen					;	hop to it.
+				Cmp.w	#cscPageMode,D0						; If we go the PageMode call,
+				Beq		DAFBSetPageMode						;	hop to it.
+				Cmp.w	#cscNoConnect,D0					; If we got the NoConnect call,
+				Beq		DAFBSetNoConnect					;	hop to it.
+				
+				CMP.W	#9,D0								; IF csCode NOT IN [0..9] THEN
+				BHI.S	DAFBCtlBad							;   Error, csCode out of bounds.
+				MOVE.W	DAFBCtlJumpTbl(PC,D0.W*2),D0		; Get the relative offset to the routine.
+				JMP		DAFBCtlJumpTbl(PC,D0.W)				; GOTO the proper routine.
+				
+DAFBCtlJumpTbl	
+				DC.W	DAFBVidReset-DAFBCtlJumpTbl			; $00 => VidReset
+				DC.W	DAFBCtlGood-DAFBCtlJumpTbl			; $01 => CtlGood (no async routines here)
+				DC.W	DAFBSetVidMode-DAFBCtlJumpTbl		; $02 => SetVidMode
+				DC.W	DAFBSetEntries-DAFBCtlJumpTbl		; $03 => SetEntries
+				DC.W	DAFBSetGamma-DAFBCtlJumpTbl			; $04 => SetGamma
+				DC.W	DAFBGrayPage-DAFBCtlJumpTbl			; $05 => GrayPage
+				DC.W	DAFBSetGray-DAFBCtlJumpTbl			; $06 => SetGray
+				DC.W	DAFBSetInterrupt-DAFBCtlJumpTbl		; $07 => SetInterrupt
+				DC.W	DAFBDirectSetEntries-DAFBCtlJumpTbl	; $08 => DirectSetEntries
+				DC.W	DAFBSetDefaultMode-DAFBCtlJumpTbl	; $09 => SetDefaultMode
+DAFBCtlBad		MOVEQ	#controlErr,D0						; else say we don't do this one
+				BRA.S	DAFBCtlDone							; and return
+			
+DAFBCtlGood		MOVEQ	#noErr,D0							; return no error
+DAFBCtlDone		MOVEM.L	(SP)+,A0/A1							; Restore Exit registers.
+				BRA		DAFBExitDrvr
+DAFBVidReset
+;---------------------------------------------------------------------
+;
+;	Reset the card to its default
+;
+;---------------------------------------------------------------------
+				WITH	DAFBVidPrivates
+			
+				MOVE	#FirstVidMode,csMode(A2)			; return default mode
+				MOVE	#FirstVidMode,saveMode(A3)			; remember FirstVidMode as the requested mode
+				MOVEQ	#0,D1								; get default depth in D1 (#firstVidMode-#firstVidMode)
+				MOVEQ	#0,D0								; get page in D0
+				MOVE	D0,csPage(A2)						; return the page
+				BSR		DAFBSetDepth						; set the depth	from D1
+				
+				Bsr		DAFBCalcScreenBaseAddr				; Calculate the new ST-corrected screen baseAddr,
+				Move.l	saveScreenBase(A3),csBaseAddr(A2)	;	and return it.
+				
+				BSR		DAFBGrayScreen						; paint the screen gray
+				BRA.S	DAFBCtlGood							; => no error
+	
+				ENDWITH
+DAFBSetVidMode
+;---------------------------------------------------------------------
+;
+;  Set the card to the specified mode.  Only page zero is possible,
+;	 so we need to check that the request was OK.
+;
+;  If the card is already set to the specified mode, then do nothing.
+;
+;---------------------------------------------------------------------
+				WITH	DAFBVidPrivates
+			
+				MOVE.W	csMode(A2),D1						; D1 = mode
+				BSR		DAFBChkMode							; check mode and convert
+				BNE.S	DAFBCtlBad							; => not a valid mode
+	
+				TST.W	csPage(A2)							; only page zero is valid
+				BNE.S	DAFBCtlBad							; => not a valid page
+; Only set if mode has changed.
+	
+				MOVE.W	csMode(A2),D2						; get the mode spID (D1 has the zero-based mode)
+				CMP		saveMode(A3),D2						; has the mode changed?
+				BEQ		@ModeOK1							; if not, then skip graying
+		
+; Remember the newly requested mode.
+				MOVE.W	D2,saveMode(A3)						; remember requested mode
+						
+; Set the entire color table to gray before switching to avoid screen anomalies.
+				Movem.l	A4-A6/D5,-(Sp)						; Save gamma-table registers.
+	
+				Move.l	saveGammaPtr(A3),A0					; Get pointer to gamma data structure.
+				Lea		gFormulaData(A0),A4					; Point to first gamma table.
+				Adda.w	gFormulaSize(A0),A4					;
+				Move.l	A4,A5								; Point to green data (assuming gChanCnt = 1).
+				Move.l	A4,A6								; Point to red data (assuming gChanCnt = 1).
+							
+				Cmp.w	#1,gChanCnt(A0)						; If there’s only one table,
+				Beq.s	@OnlyOneTable						;	then we’re set.
+				
+				Move.w	gDataWidth(A0),D2					; Get width of each entry (in bits).
+				Move.w	gDataCnt(A0),D0						; Get # of entries in table.
+				Addq	#7,D2								; Round to nearest byte.
+				Lsr.w	#3,D2								; Get bytes per entry.
+				Mulu	D2,D0								; Get size of table in bytes.
+				
+				Adda.w	D0,A5								; Calc base of green (red base + D0).
+				Adda.w	D0,A6								; Calc base…
+				Adda.w	D0,A6								;	…of blue (red base + D0 + D0).
+@OnlyOneTable
+			
+				Move.w	gDataCnt(A0),D3						; Save number of gamma entries.
+				
+				MOVEQ	#true32b,D0							; flip to 32-bit addressing mode
+				_SwapMMUMode								;
+				MOVE.B	D0,-(SP)							; save current addressing mode
+				
+				MOVE.L	saveVDACBase(A3),A0					; get the VDAC base addr
+				ADDA	#ACDC_DataReg,A0					; point to data register
+				CLR.L	ACDC_AddrReg-ACDC_DataReg(A0)		; start at the beginning of CLUT
+			
+				MOVE.W	SR,-(SP)							; preserve the status register
+				BSR		DAFBWaitVSync						; wait for next blanking period (preserves A0)
+; Write out gamma-corrected gray CLUT…
+;
+				Move.w	D3,D0								; Init loop counter.
+				Subq	#1,D0								; Zero base it.
+				
+				Lsr.w	#1,D3								; Get midpoint of table(s).
+				Moveq	#0,D2								; Clear write register.
+				
+				Move.w	GFlags(A3),D5						; Get the GFlags into a convient register.
+@Repeat			Btst	#IsMono,D5							; If this is not a mono-only display
+				Beq.s	@DoRGB								;	then just do the standard RGB stuff.
+				Clr.l	(A0)								; Otherwise, just write black out								
+				Clr.l	(A0)								;	to the red & green channels.
+				Bra.s	@DoMono								;
+@DoRGB			Move.b	(A4,D3),D2							; Set up to write
+				Move.l	D2,(A0)								;	red.
+				Move.b	(A5,D3),D2							; Set up to write
+				Move.l	D2,(A0)								;	green.
+@DoMono			Move.b	(A6,D3),D2							; Set up to write
+				Move.l	D2,(A0)								; 	blue.
+				Dbra	D0,@Repeat	
+				
+				MOVE	(SP)+,SR							; restore the status reg
+				MOVE.B	(SP)+,D0							; get the MMU mode back
+				_SwapMMUMode								;
+				
+				Movem.l	(Sp)+,A4-A6/D5						; Restore gamma-table registers.
+				BSR		DAFBSetDepth						; set the depth from D1
+; Finish up the bookkeeping.
+	
+				MOVE.W	csMode(A2),saveMode(A3) 			; save mode number
+				CMP.W	#FifthVidMode,saveMode(A3)			; was it a direct mode?
+				BLT.S	@BitOff								; no, so turn flag off
+			
+				BSET	#IsDirect,GFlags(A3)				; turn on bit
+				BRA.S	@ModeOK1							;
+@BitOff
+				BCLR	#IsDirect,GFlags(A3)				; turn off bit
+@ModeOK1			
+				Bsr		DAFBCalcScreenBaseAddr				; Calculate the new ST-corrected screen baseAddr,
+				Move.l	saveScreenBase(A3),csBaseAddr(A2)	;	and return it.
+				
+				BRA 	DAFBCtlGood							; return no error
+			
+				ENDWITH
+DAFBSetEntries
+;---------------------------------------------------------------------
+;
+;	Input :
+;			csParam -> datablock
+;			datablock = csTable -> table of colorSpecs (not colortable)
+;						csStart -> where to start setting, or -1
+;						csCount -> # of entries to change
+;
+;  	This call has two modes.  In SEQUENCE mode, csCount entries are changed
+;	in the CLUT, starting at csStart.  In INDEX mode, csCount entries are
+;	installed into the CLUT at the positions specified by their .value fields.
+;	This mode is selected by passing csStart = -1.  In both cases, entries are
+;	range-checked to the dynamic range of the video mode (bits/pixel).
+;
+;---------------------------------------------------------------------
+;
+;	Set the CLUT
+;		A0 = Ptr to the table
+;		A1 = Ptr to AuxDCE
+;		A2 = Ptr to cs parameter record
+;		A3 = Ptr to private data, later to CLUT constants table
+;		A4 = Ptr to gamma red table
+;		A5 = Ptr to gamma green table
+;		A6 = Ptr to gamma blue table
+;
+;		D0-D3 = Scratch
+;		D4 = Size of stack color table buffer
+;       D5 = GFlags word
+;		D6 = Index range [0..n]
+;		D7 = gamma channel size in bits
+;
+;---------------------------------------------------------------------
+; Initialize loop.
+	
+				WITH 	DAFBVidPrivates
+			
+				BTST	#IsDirect,GFlags(A3)				; are we in a direct mode?
+				BNE		DAFBCtlBad							; error if so
+DAFBSEGuts			
+				TST.L	csTable(A2)							; Check for a nil pointer
+				BEQ 	DAFBCtlBad							;
+								
+				MOVEM.L	A1/A4-A6/D4-D7,-(SP)				; save registers for gamma
+	
+				MOVE.W	GFlags(A3),D5						; get GFlags word in D5
+	
+				CMP.W	#indexEntries,csStart(A2)			; was it indexed mode?
+				BEQ.S	@SkipSeq							; if so, then leave bit off (it's never turned on in GFlags)
+				BSET	#UseSeq,D5							; if not, turn on sequential mode bit
+@SkipSeq
+				MOVE.L	saveGammaPtr(A3),A0					; get pointer to gamma data structure
+				MOVE.W	gFormulaSize(A0),D0					; get the size of formula data
+				LEA		gFormulaData(A0,D0),A4				; red correction table starts here
+				MOVE.L	A4,A5								; get default pointer to green data
+				MOVE.L	A4,A6								; get default pointer to blue data
+				MOVE	gDataWidth(A0),D7					; get width of each entry in bits
+				CMP		#1,gChanCnt(A0)						; if only only one table, we're set
+				BEQ.S	@OneTbl								; => just one table
+	
+				MOVE	gDataCnt(A0),D0						; get # entries in table
+				MOVE	D7,D1								; copy it to goof around
+				ADDQ	#7,D1								; round to nearest byte
+				LSR		#3,D1								; get bytes per entry
+				MULU	D1,D0								; get size of table in bytes
+	
+				ADDA	D0,A5								; calc base of green
+				ADDA	D0,A6								; calc base of blue
+				ADDA	D0,A6								; calc base of blue
+@OneTbl
+;
+; Get the maximum number of entries, zero based from a convenient table.
+;
+				MOVE.W	saveMode(A3),D1						; get the current video mode
+				SUB.W	#FirstVidMode,D1					; convert to index
+				
+				LEA		DAFBClutTbl,A0						; point to little table of counts
+				MOVEQ	#0,D6								; clear all of D6
+				MOVE.B	(A0,D1),D6							; get entry from table for this mode
+			
+;
+; Allocate a temporary color table on the stack.  We'll pre-process all the entries that will 
+;	change here so we can hit the hardware as quickly as possible.
+;
+	
+				MOVE.W	csCount(A2),D4						; get the number of entries to change
+				CMP.W	D6,D4								; is it in the allowable range
+				BHI		DAFBSEBadExit						; if out of range, then exit w/bad result
+				
+				Move.w	csStart(A2),D0						; Get the start number to range check.
+				Addq.w	#1,D0								; If csStart < -1, then it’s out of
+				Bmi		DAFBSEBadExit						;	range.
+	
+;
+; In order to support 16bpp modes, we ALWAYS use indexed mode for SetEntries, since the real entries must
+;	be translated from a 5-bit value into an 8-bit index.  Note:  The UseTrans & UseSeq are actually the
+;	same bit so that the indexed write routine works correctly.
+;
+	
+				MOVE.L	csTable(A2),D0						; Some (bad) people pass in an offset
+				_StripAddress								;	CTabHandle’s MasterPointer here,
+				Move.l	D0,A1								;	so we clean them up.  Ugh!
+				
+				Move.w	D4,D1								; Make a copy of the number of entries, and
+				Addq	#1,D4								; 	make it counting for now.
+				
+				Moveq	#0,D6								; Assume that we aren’t doing 16bpp translations.
+															;	(i.e., #UseTrans in D6 is clear).
+				Move.w	saveMode(A3),D0						; Get the current mode.
+				Cmp.w	#FifthVidMode,D0					; If we’re not doing 16bpp,
+				Bne.s	@IndexTest							;	then just go on.
+				Bset	#UseTrans,D6						; Otherwise, remember that we’re translating.
+				Bclr	#UseSeq,D5							; If we’re already indexed,
+				Beq.s	@isIndex							;	then just go on.
+				Move.w	D1,D2								; Otherwise, sequence thru table from
+				Add.w	csStart(A2),D2						; 	csStart thru csCount entries.
+			
+; The following code is BAD, BAD, BAD!  We should build our own table here so
+;	as to NOT mess up the user’s data.  But all the previous Apple video drivers
+;	have done the same thing here, so we’ll continue the trend for now.
+@TableLoop		Move.w	D2,value(A1,D1*colorSpecSize)		; Write the index into the table.
+				Subq	#1,D2								; Decrement index.
+				Dbra	D1,@TableLoop						;
+				Bra.s	@isIndex
+@IndexTest		ADDQ	#1,D4								; make number of entries a counting number
+				BTST	#UseSeq,D5							; are we in sequential mode?
+				BEQ.S	@isIndex							; if equal, we're indexed
+@isSeq			MULU	#3,D4								; room for R,G,B in sequential mode
+				BRA.S	@allocIt							; and continue
+@isIndex		ASL		#2,D4								; multiply times 4 for index,R,G,B
+@allocIt		SUB.W	D4,SP								; allocate the buffer and save size in D4
+;
+; Construct the stack version of the color table. It looks like a color table, but each of the
+;	components is only eight bits (rather than 16).  These will be expanded to longs when they
+;	are written to the hardware
+;
+				
+				MOVE.L	SP,A0								; copy the stack buffer pointer
+				MOVE.W	csCount(A2),D3						; get the number of entries again
+				
+;												
+; Write the index if in indexed mode.  If in sequential mode, blow it off completely,
+;	since it won't be needed. 
+@SetupLoop
+				MOVE.W	(A1)+,D1							; get index
+	
+				BTST	#UseSeq,D5							; is it sequence mode?
+				BNE.S	@SLSeq								; yup, so go there
+				
+				Btst	#UseTrans,D6						; If we’re not supposed to do the 5-to-8 translations,
+				Beq.s	@WriteIndex							;	then just write out the index to the stack.
+				Bsr		DAFBTrans5to8						; Otherwise, do the translation.
+				
+@WriteIndex		MOVE.B	D1,(A0)+							; Write out index to stack table.
+			
+@SLSeq			
+				MOVE.W	(A1)+,D0							; get red
+				MOVE.W	(A1)+,D1							; get green
+				MOVE.W	(A1)+,D2							; get blue
+	
+				TST		D5									; test hi bit of the flags
+				BPL.S	@NoGray								; if not set, don't luminence map
+				
+				BTST	#IsDirect,D5						; test for direct mode as well
+				BNE.S	@NoGray								; don't allow luminence mapping in direct mode
+	
+; We're luminence mapping here.
+	
+				MULU	#$4CCC,D0							; multiply by red weight (0.30)
+				MULU	#$970A,D1							; multiply by green weight (0.59)
+				MULU	#$1C29,D2							; multiply by blue weight (0.11)
+				ADD.L	D1,D0								; sum red and green
+				ADD.L	D2,D0								; blue also
+				BFEXTU	D0{0:D7},D0							; get gChanWidth bits for gamma table lookup
+				MOVE.W	D0,D1								; copy into green register
+				MOVE.W	D0,D2								; copy into blue register
+	
+				BRA.S	@WriteSP							; go on and write it in the stack buffer
+			
+@NoGray
+				BFEXTU	D0{16:D7},D0						; get gChanWidth bits of red
+				BFEXTU	D1{16:D7},D1						; get gChanWidth bits of green
+				BFEXTU	D2{16:D7},D2						; get gChanWidth bits of blue	
+				
+@WriteSP
+				BTST	#IsMono,D5							; if monochrome display, write black to red & green
+				BEQ.S	@Brighter							; if not, then set all three channels
+				CLR.B	(A0)+								; write black for red
+				CLR.B	(A0)+								;	and green
+				BRA.S	@Looper								; write out normal blue
+@Brighter	
+				MOVE.B	(A4,D0),(A0)+						; write gamma corrected red
+				MOVE.B	(A5,D1),(A0)+						; write gamma corrected green
+			
+@Looper
+				MOVE.B	(A6,D2),(A0)+						; write gamma corrected blue
+				DBRA	D3,@SetupLoop						; and loop for each entry
+			
+;
+; OK, the stack table is set up.  Now let's load the hardware.
+;
+	
+				MOVE.W	csCount(A2),D3						; get the count again
+				MOVE.L	saveVDACBase(A3),A4					; get VDAC base
+				LEA		ACDC_DataReg(A4),A4					; point to VDAC data register
+	
+				MOVEQ	#true32b,D0							; flip to 32-bit addressing mode
+				_SwapMMUMode								;
+				MOVE.B	D0,-(SP)							; save current addressing mode
+				
+				LEA		2(SP),A0							; point to the stack buffer again
+				CLR.L	D1									; get the high 3 bytes of D1 clear
+	
+				MOVE.W	SR,-(SP)							; preserve the status register
+				BSR		DAFBWaitVSync						; wait for next blanking period (preserves A0/D0)
+	
+				BTST	#UseSeq,D5							; is it sequence mode?
+				BNE.S	DAFBSeqWrite						; yup, sequence mode, so go
+			
+;
+; Here's the loop that actually writes to the hardware when in indexed mode.
+;
+DAFBIndexWrite
+				MOVE.B	(A0)+,D1							; get the index
+				MOVE.L	D1,ACDC_AddrReg-ACDC_DataReg(A4) 	; write the index value to the CLUT address
+				MOVE.B	(A0)+,D1							; get red
+				MOVE.L	D1,(A4)								; write red			
+				MOVE.B	(A0)+,D1							; get green
+				MOVE.L	D1,(A4)								; write green
+				MOVE.B	(A0)+,D1							; get blue
+				MOVE.L	D1,(A4)								; write blue
+				DBRA	D3,DAFBIndexWrite					; and loop
+				BRA.S	DAFBSEDone							;
+		
+;
+; Write the translated starting position for sequence mode.
+;
+DAFBSeqWrite	
+				MOVE.W	csStart(A2),D1						; get sequence start address
+				MOVE.L	D1,ACDC_AddrReg-ACDC_DataReg(A4)	; write the sequence start position
+			
+;
+; Here's the loop that actually writes to the hardware when in sequence mode.
+;
+@SeqLoop
+				MOVE.B	(A0)+,D1							; get red
+				MOVE.L	D1,(A4)								; write red			
+				MOVE.B	(A0)+,D1							; get green
+				MOVE.L	D1,(A4)								; write green
+				MOVE.B	(A0)+,D1							; get blue
+				MOVE.L	D1,(A4)								; write blue
+				DBRA	D3,@SeqLoop							; and loop
+		
+;
+; Clean up and go home.
+;
+DAFBSEDone		
+				MOVE	(SP)+,SR							; restore status register
+				MOVE.B	(SP)+,D0							; get the previous mode back
+				_SwapMMUMode								;
+			
+				ADD		D4,SP								; release stack buffer
+				MOVEM.L	(SP)+,A1/A4-A6/D4-D7				; restore registers
+				BRA		DAFBCtlGood							; return O-Tay!
+			
+DAFBSEBadExit	
+				MOVEM.L	(SP)+,A1/A4-A6/D4-D7				; restore registers
+				BRA		DAFBCtlBad							; return an error code
+		
+				ENDWITH
+DAFBSetGamma
+;---------------------------------------------------------------------
+;
+;	Set the gamma table.  This call copies the supplied gTable so the 
+;		caller does not have to put the source on the system heap.  It
+;		tests if the gamma table is exactly a match to the currently
+;		connected monitor, or always allows it if the monitor number in
+;		the FormulaData is -1.  If supplied gamma table ptr is NIL, then
+;		it loads a linear gamma table into the private table
+;
+;		A0 = Ptr to private storage
+;		A1 = Ptr to AuxDCE
+;		A2 = Ptr to cs parameter record
+;
+;---------------------------------------------------------------------
+			
+				WITH	DAFBVidPrivates
+		
+; Get new gamma table and check that we know how to handle it.
+			
+				MOVE.L	csGTable(A2),D0						; test for a NIL pointer
+				BEQ		@LinearTab							; if so, then set up a linear gamma table
+				MOVE.L	D0,A2								; get pointer to new gamma table
+			
+				TST.W	gVersion(A2)						; version = 0?
+				BNE		DAFBCtlBad							; => no, return error
+				Tst.w	gType(A2)							; Test the hardwareID.
+				Beq.s	@ChangeTable						; If 0, then accept a TFB-style gamma table.
+				CMP.W	#drHwRasterOps24MxQ,gType(A2)		; type = DAFB?		jwh
+				BNE		DAFBCtlBad							; => no, return error
+				TST.W	gFormulaSize(A2)					; if gType=DAFB, then check for monID in gFormulaData
+				BEQ.S	@ChangeTable						; if zero, then generic, so continue
+				MOVE.W	gFormulaData(A2),D0					; get the monitor ID this table was intended for
+				CMP.W	saveMonID(A3),D0					; is this the monitor? 
+				BEQ.S	@ChangeTable						; yes, so do it
+				ADDQ	#1,D0								; was it -1?
+				BNE 	DAFBCtlBad							; nope, so must be wrong monitor
+			
+; If new table is a different size, reallocate memory.
+@ChangeTable
+				MOVE.L	saveGammaPtr(A3),A0					; get current gamma in A0
+				MOVE	gFormulaSize(A2),D0					; get size of formula in new
+				CMP		gFormulaSize(A0),D0					; same as current gamma table
+				BNE.S	@GetNew								; =>no, resize pointer
+				MOVE	gChanCnt(A2),D0						; get number of tables in new
+				CMP		gChanCnt(A0),D0						; same as current gamma table?
+				BEQ.S	@SizeOK								; => yes, data size ok
+				BGT.S	@GetNew								; => new one is bigger, save old one
+@NewSize		Move.l	saveGamDispPtr(A3),A0				; if new one is smaller,
+				_DisposPtr									;	dispose old one								
+				CLR.L	saveGamDispPtr(A3)					; flag it's been disposed
+			
+@GetNew			MOVE	gDataCnt(A2),D0						; get number of entries
+				MULU	gChanCnt(A2),D0						; multiply by number of tables
+				ADD		gFormulaSize(A2),D0					; add size of formula data
+				ADD		#gFormulaData,D0					; add gamma table header size
+				_NewPtr ,Sys								; and allocate a new pointer
+				BNE		DAFBCtlBad							; => unable to allocate storage
+			
+				MOVE.L	saveGamDispPtr(A3),D0				; get old gamma table
+				MOVE.L	A0,saveGammaPtr(A3)					; save new gamma table
+				TST.L	D0									; was there an old one?
+				BEQ.S	@SizeOK								; => no, already disposed
+				MOVE.L	D0,A0								; else get old table
+				_DisposPtr									; and dispose of old gamma table
+				
+				MOVE.L	saveGammaPtr(A3),A0					; get new gamma table back
+				Move.l	A0,saveGamDispPtr(A3)				; save it for disposal
+						
+; Copy the gamma table header.
+			
+@SizeOK			MOVE	gChanCnt(A2),D0						; get number of tables
+				MOVE	gFormulaSize(A2),D1					; get size of formula data
+				MOVE	gDataCnt(A2),D2						; get number of entries
+				MOVE.L	(A2)+,(A0)+							; copy gamma header
+				MOVE.L	(A2)+,(A0)+							; which is
+				MOVE.L	(A2)+,(A0)+							; 	12 bytes long
+			
+; Copy the data.
+			
+				MULU	D0,D2								; multiply by number of tables
+				ADD		D1,D2								; add in size of formula data
+				SUBQ	#1,D2								; get count - 1
+@NxtByte		MOVE.B	(A2)+,D0							; get a byte
+				MOVE.B	D0,(A0)+							; move a byte
+				DBRA	D2,@NxtByte							; => repeat for all bytes
+				Bra.s	@GammaDone							; Check to see if it’s a direct device.
+;
+; Set up a linear gamma table.  To prevent memory thrash, build this new one
+;	the same size as the existing one (one or three channel).  
+;
+@LinearTab
+				MOVE.L	saveGammaPtr(A3),A0					; get current gamma in A0
+				MOVE.W	gFormulaSize(A0),D0					; get size of formula in new
+				MOVE.W	gChanCnt(A0),D2						; get the number of tables
+				SUBQ	#1,D2								; zero based, of course
+				Move.w	gDataCnt(A0),D3						; get the number of entries
+				Subq	#1,D3								; zero base
+				ADDA	#gFormulaData,A0					; point to tables
+				ADDA	D0,A0								; point past monID, if present
+@ChanLoop		MOVE.W	D3,D0								; loop count within each channel
+@entryLoop		MOVE.B	D0,(A0)								; write this value out
+				Not.b	(A0)+								; invert to make table ramp properly
+				DBRA	D0,@entryLoop						; for each entry in channel
+				DBRA	D2,@ChanLoop						; and each channel
+@GammaDone			
+				BTST	#IsDirect,GFlags(A3)				; are we in a direct mode?
+				BEQ.S	@Out								; if not, then we're done
+				BSR		DAFBDirectCLUTSet					; if so, then set up direct CLUT ramps
+			
+@Out
+				BRA		DAFBCtlGood							; => return no error
+			
+				ENDWITH
+DAFBGrayPage											
+;---------------------------------------------------------------------
+;
+;	Clear the specified page in the current mode to gray
+;
+;		A0 = Ptr to private storage
+;		A1 = Ptr to AuxDCE
+;		A2 = Ptr to cs parameter record
+;		A3 = Ptr to driver privates
+;
+;---------------------------------------------------------------------
+			
+				WITH DAFBVidPrivates
+	
+				MOVE	saveMode(A3),D1						; D1 = mode
+				BSR		DAFBChkMode							; convert mode to depth in D1
+				BNE		DAFBCtlBad							; => not a valid depth
+				
+				MOVE	csPage(A2),D0						; D0 = page
+				BNE 	DAFBCtlBad							; => not a valid page
+	
+				BSR		DAFBGrayScreen						; paint the screen gray
+	
+				BTST	#IsDirect,GFlags(A3)				; are we in a direct mode?
+				BEQ.S	@Out								; if not, then we're done
+				BSR		DAFBDirectCLUTSet					; if so, then set up direct CLUT ramps
+@Out
+				BRA		DAFBCtlGood							; => return no error
+	
+				ENDWITH
+DAFBSetGray
+;---------------------------------------------------------------------
+;
+;	Set luminance mapping on (csMode = 1) or off (csMode = 0)
+;
+;   When luminance mapping is on, RGB values passed to setEntries are mapped
+; 	to grayscale equivalents before they are written to the CLUT.
+;
+;		A1 = Ptr to AuxDCE
+;		A2 = Ptr to cs parameter record
+;
+;---------------------------------------------------------------------
+			
+				WITH	DAFBVidPrivates
+		
+				BTST	#IsMono,GFlags(A3)					; is this a mono-only monitor?
+				BEQ.S	@1									; if not, then go ahead
+				MOVE.B	#1,csMode(A2)						; always turn on for mono devices
+@1				MOVEQ	#0,D1								; set up for BFEXTU to point to GrayFlag
+				BSR.S	DAFBSetIntCom						; call common code
+				BRA		DAFBCtlGood							; all done
+			
+;
+; This shared routine setup up a flag in GFlags.  It takes a pointer to 
+;	private storage in A3, and the bit field start location in D1.
+;
+			
+DAFBSetIntCom											
+				MOVE.B	csMode(A2),D0						; get boolean
+				BFINS	D0,GFlags(A3){D1:1}					; set flag bit
+				RTS											; and return
+				ENDWITH
+DAFBSetInterrupt
+;---------------------------------------------------------------------
+;
+;	Enable (csMode = 0) or disable (csMode = 1) VBL interrupts
+;
+;   As a future performance enhancement, interrupts on the card can be
+;	disabled or enabled from software. For instance, if the cursor is
+;	not on a screen, and there is nothing in the Slot Interrupt Queue
+;	for that device, interrupts may be disabled reducing interrupt 
+;	overhead for the system.
+;
+;	The slot interrupt queue element is always allocated by the Open call.
+;	This routine just inserts and removes it from the slot interrupt task queue.
+;
+;		A1 = Ptr to AuxDCE
+;		A2 = Ptr to cs parameter record
+;		A3 = Ptr to private storage
+;
+;---------------------------------------------------------------------
+				WITH	VDPageInfo,SlotIntQElement,DAFBVidPrivates
+			
+				MOVEQ	#1,D1								; set up for BFEXTU to point to IntDisFlag
+				BSR.S 	DAFBSetIntCom						; call common code
+				BNE.S	@DAFBDisableThem					; if zero, then enable
+; This code enables interrupts and installs the interrupt handler.
+;
+				BSR.S	DAFBEnableVGuts						; call common code
+				BNE		DAFBCtlBad							; error, flag problem
+				BRA		DAFBCtlGood							; and go home
+			
+; This code disables VBL interrupts, then removes the interrupt handler.
+;
+@DAFBDisableThem	
+				BSR.S	DAFBDisableVGuts					; jump to the disabling utility
+				BRA		DAFBCtlGood							; all done
+			
+; The following two routines are common code shared between the Open/Close calls
+;	and the SetInterrupt control call.
+;
+DAFBDisableVGuts
+				MOVEQ	#true32b,D0							; flip to 32-bit addressing mode
+				_SwapMMUMode								;
+				MOVE.B	D0,-(SP)							; save current addressing mode
+				
+				MOVE.W	SR,-(SP)							; preserve the status register
+				BSR		DAFBWaitVSync						; to be safe, wait for the next VBL
+				
+				MOVE.L	saveDAFBBase(A3),A0					; point to the DAFB base
+				CLR.L	Swatch_IntMsk(A0)					; set slot 0 interrupt disabled 
+				MOVE	(SP)+,SR							; re-enable cursor interrupts
+	
+				MOVE.B	(SP)+,D0							; get back addressing mode
+				_SwapMMUMode								;
+	
+				MOVEQ	#0,D0								; parameter size to SInstall is not byte sized so clr whole long
+				MOVE.B	dctlSlot(A1),D0						; setup slot # for _SIntRemove
+				MOVE.L	saveSQElPtr(A3),A0					; get the SQ element pointer
+				_SIntRemove									; remove the interrupt handler
+				RTS
+DAFBEnableVGuts												; 
+				MOVE.L	saveSQElPtr(A3),A0					; get the queue element
+				LEA		DAFBBeginIH,A2						; save Pointer to interrupt handler
+				MOVE.W	#SIQType,SQType(A0)					; setup queue ID
+				MOVE.L	A2,SQAddr(A0)						; setup int routine address
+				MOVE.L	A3,SQParm(A0)						; pass pointer to privates as the parameter
+				MOVEQ	#0,D0								; parameter size to SInstall is not byte sized so clr whole long
+				MOVE.B	dctlSlot(A1),D0						; 
+				_SIntInstall								; and do install
+				BNE.S 	@IntBad
+			
+				MOVEQ	#true32b,D0							; flip to 32-bit addressing mode
+				_SwapMMUMode								;
+				MOVE.B	D0,-(SP)							; save current addressing mode
+			
+				MOVE.L	saveDAFBBase(A3),A0					; point to the DAFB base
+			
+; DAFB’s vertical timing generator is driven from a clock which is only half the frequency of the horizontal
+;	timing generator clock.  Therefore, all the vertical timing registers are double-sized.  However, the
+;	CrsrLine register is specified in whole lines.  So, in order to get VBL happening at just the right
+;	time, we must divide VFP by 2.
+;
+				Move.l	Swatch_VFP(A0),D0					; Get current VFP.
+				Andi.l	#$FFF,D0							; 	Strip off junk.
+				Lsr.l	#1,D0								;	Divide by 2.
+				Addq	#1,D0								; 	Add 1.
+				Move.l	D0,Swatch_CrsrLine(A0)				; Set interrupt to occur AFTER VFP, and
+				Move.l	#dafbEnableVInts,Swatch_IntMsk(A0)	; turn on interrupt.
+			
+				MOVE.B	(SP)+,D0							; get addressing mode back
+				_SwapMMUMode								;
+				CMP		D0,D0								; clear z-bit for good result
+@IntBad			RTS											; return home (if bad, z-bit is set above, so just leave) <8>
+				ENDWITH
+DAFBDirectSetEntries
+;---------------------------------------------------------------------
+;
+;	Change the CLUT in a direct mode.
+;
+;		A1 = Ptr to AuxDCE
+;		A2 = Ptr to cs parameter record
+;		A3 = Ptr to private storage
+;
+;	This routine allows knowledgeable programs modify the contents
+;	of the CLUT in direct modes (usually for limited color previewing).
+;	It takes the same parameter block as SetEntries, but SetEntries
+;	intentionally does not operate when the card is in a direct pixMode.
+;	This routine takes the same data and operates ONLY when in direct 
+;	modes.  It calls the same SetEntries guts as the regular routine.
+;
+;---------------------------------------------------------------------
+				BTST	#IsDirect,GFlags(A3)				; are we in a direct mode?
+				BEQ		DAFBCtlBad							; error if not
+				BRA		DAFBSEGuts							; jump to SetEntries internals if it's OK
+DAFBSetDefaultMode
+;---------------------------------------------------------------------
+;
+;	Write the card default mode into slot pRAM.
+;
+;		A1 = Ptr to AuxDCE
+;		A2 = Ptr to cs parameter record
+;		A3 = Ptr to private storage
+;
+;	This routine is called by Monitors when somebody selects an alternate 
+;	video mode family in the Options dialog.
+;
+;---------------------------------------------------------------------
+				WITH 	spBlock,DAFBVidPrivates,SP_Params
+;
+; Set up a slot parameter block on the stack.
+;
+	
+				SUBA		#spBlockSize,SP					; make an slot parameter block on stack
+				MOVE.L		SP,A0							; get pointer to parm block now
+				MOVE.B		dCtlSlot(A1),spSlot(A0)			; put slot in pBlock
+				CLR.B		spExtDev(A0)					; external device = 0
+;
+; Read the slot pRAM to determine what the currently saved mode is.  The first
+;	word is the board ID, followed by the default screen depth.  Built-in video keeps the video
+;	sRsrc spID in VendorUse2.  
+;
+				
+				SUBA		#SizesPRAMRec,SP				; allocate block for pRAM record
+				MOVE.L		SP,spResult(A0)					; point to it
+				_sReadPRAMRec								; read it
+;
+; Since PrimaryInit relies on the default mode being set correctly, we check to see that
+;	the mode to be set is actually valid.  Monitors can only see valid sRsrcIDs, so
+;	it probably won’t cause a problem.  But we should check it anyway for unsavory
+;	applications.
+;
+				
+				Move.b		csMode(A2),spID(A0)				; Look for the passed in spID.
+				Clr.l		spParamData(A0)					; Clear the fNext flag; we want THIS sRsrc.
+				Ori.b		#(1<<fall)|\					; Search for both enabled/disabled sRsrc’s
+							(1<<foneslot),spParamData+3(A0)	; Only search in our slot.
+				_GetsRsrc									; Do it.
+				Bne.s		@BadExit						; If failed, quit.
+				
+				Move.w		spCategory(A0),D0				; Get the category.
+				Cmp.w		#catDisplay,D0					; If it’s not catDisplay,
+				Bne.s		@BadExit						;	then quit.
+				Move.w		spCType(A0),D0					; Get the type.
+				Cmp.w		#typVideo,D0					; If it’s not typVideo,
+				Bne.s		@BadExit						;	then quit.
+				Move.w		spDrvrSw(A0),D0					; Get the software kind.
+				Cmp.w		#drSwApple,D0					; If it’s not drSwApple,
+				Bne.s		@BadExit						;	then quit.
+				Move.w		spDrvrHw(A0),D0					; Get the hardware ID.
+				Cmp.w		#drHwRasterOps24MxQ,D0			; If it’s not drHwRasterOps24MxQ,		jwh
+				Bne.s		@BadExit						;	then quit.
+;
+; It is very important that Monitors (or someone) invalidate and setup the screen resource
+;   if this call is exercised.  Monitors needs to verify (and potentially re-write to pRAM)
+;	the proper screen depth in the new world.
+;
+				Btst		#IsDirect,GFlags(A3)			; If we’re not in a direct mode,
+				Beq.s		@WriteIt						;	just go on.
+				
+				Move.b		csMode(A2),D0					; Get the mode we’re going to.
+				Cmp.b		#sRsrc_Vid_DAFB_NTSCconvST,D0	; If we’re going to a convolved mode,
+				Beq.s		@ConvFix						;	fix the depth.
+				Cmp.b		#sRsrc_Vid_DAFB_NTSCconvFF,D0	;
+				Beq.s		@ConvFix						;
+				Cmp.b		#sRsrc_Vid_DAFB_PALconvST,D0	;
+				Beq.s		@ConvFix						;
+				Cmp.b		#sRsrc_Vid_DAFB_PALconvFF,D0	; 
+				Bne.s		@WriteIt						;
+@ConvFix		Move.b		#FourthVidMode,SP_Depth(Sp)		; Reset the depth to indexed.
+				
+@WriteIt		MOVE.B		csMode(A2),SP_LastConfig(SP)	; write the mode into pRAM buffer
+				MOVE.L		SP,spsPointer(A0)				; set up parameter block
+				_sPutPRAMRec								; write the new record out
+@GoodExit		ADDA		#SizesPRAMRec+spBlockSize,SP	; Deallocate buffer and
+				BRA			DAFBCtlGood						;	return good result.
+				
+@BadExit		Adda		#SizesPRAMRec+spBlockSize,SP	; Deallocate buffer and
+				Bra			DAFBCtlBad						;	return bad result.
+				
+				ENDWITH
+DAFBSetSyncOnGreen
+;---------------------------------------------------------------------
+;
+;	Enable (csMode = 0) or disable (csMode = non-zero) the sync on green.
+;
+;		A1 = Ptr to AuxDCE
+;		A2 = Ptr to cs parameter record
+;		A3 = Ptr to private storage
+;
+;---------------------------------------------------------------------
+				With 	spBlock,DAFBVidPrivates,SP_Params
+;
+; First, set up a slot parameter block on the stack.
+;
+				
+				Suba	#spBlockSize,Sp						; Make a SpBlock on the stack.
+				Move.l	Sp,A0								; Get a pointer to it into A0.
+				Move.b	dCtlSlot(A1),spSlot(A0)				; Set it up.
+				Clr.b	spExtDev(A0)
+				
+;
+; Next, read the current pRam record so that we can write it back if necessary.
+;
+				
+				Suba	#SizesPRAMRec,Sp					; Make an sPRAM block on the stack.
+				Move.l	Sp,spResult(A0)						; Point to it.
+				_sReadPRamRec								; Get pRAM.
+				
+;
+; See what we need to do…
+;
+				
+				Tst.b	csMode(A2)							; If csMode = 0, then we are
+				Beq.s	@EnableSyncOnGreen					;	enabling sync on green.
+				Btst	#syncOnGreen,GFlags(A3)				; If we’re already NOT putting sync on green,
+				Beq.s	@Done								;	then there’s nothing left to do.
+				Bclr	#syncOnGreen,GFlags(A3)				; Otherwise, set up the GFlags field,
+				Bclr	#spSyncOnGreen,SP_Flags(Sp)			;	the pRam record, and
+				Moveq	#0,D1								; 	the toggle bit.
+				Bra.s	@SyncCommon							;	
+				
+@EnableSyncOnGreen
+				Btst	#syncOnGreen,GFlags(A3)				; If we’re already putting sync on green,
+				Bne.s	@Done								;	then there’s nothing left to do.
+				Bset	#syncOnGreen,GFlags(A3)				; Otherwise, set up the GFlags field
+				Bset	#spSyncOnGreen,SP_Flags(Sp)			;	the pRam record, and
+				Moveq	#1,D1								;	the toggle bit.
+				
+@SyncCommon				
+				Move.l	Sp,spsPointer(A0)					; Set up to whack pRam.
+				_sPutPRAMRec								; Whack it.
+				
+				Moveq	#true32b,D0							; Set up to flip into 32-bit addressing mode.
+				_SwapMMUMode								; Do flip.
+				Move.b	D0,-(Sp)							; Save previous mode for later.
+				
+				Move.w	Sr,-(Sp)							; Save the current interrupt level.
+				Bsr		DAFBWaitVSync						; Wait for VBL at level 2.
+				Move.w	(Sp)+,Sr							; Restore interrupt level.
+				
+				Move.l	saveDAFBBase(A3),A0					; Get DAFBBase into A0.
+				Move.l	DAFB_ClkCfg(A0),D0					; Get the current clock config value.
+				Bfins	D1,D0{dafbSyncOnGreen:1}			; Toggle the sync-on-green bit appropriately,
+				Move.l	D0,DAFB_ClkCfg(A0)					;	apply it.
+				
+				Move.b	(Sp)+,D0							; Set up to switch back to prev mode,
+				_SwapMMUMode								; 	and do it.
+					
+@Done			Adda	#SizesPRAMRec+spBlockSize,Sp		; Restore stack, and
+				Bra		DAFBCtlGood							;	go home.
+				
+				EndWith
+				
+DAFBSetPageMode
+;---------------------------------------------------------------------
+;
+;	Enable (csMode = 0) or disable (csMode = non-zero) Page Mode.
+;
+;		A1 = Ptr to AuxDCE/ptr to DAFBBase addr (not restored)
+;		A2 = Ptr to cs parameter record
+;		A3 = Ptr to private storage
+;
+;---------------------------------------------------------------------
+				With 	spBlock,DAFBVidPrivates,SP_Params
+				
+;
+; First, set up a slot parameter block on the stack.
+;
+				
+				Suba	#spBlockSize,Sp						; Make an SpBlock on the stack.
+				Move.l	Sp,A0								; Get a pointer to it into A0.
+				Move.b	dCtlSlot(A1),spSlot(A0)				; Set it up.
+				Clr.b	spExtDev(A0)
+				
+;
+; Next, read the current pRam so that we can set it appropriately…
+;
+				
+				Suba	#SizesPRAMRec,Sp					; Make an sPRAM block on the stack.
+				Move.l	Sp,spResult(A0)						; Point to it.
+				_sReadPRamRec								; Get pRAM.
+				
+				Moveq	#true32b,D0							; Set up to switch into 32-bit mode,
+				_SwapMMUMode								; 	do switch, and
+				Move.b	D0,D1								; 	save previous mode.
+				
+				Move.l	saveDAFBBase(A3),A1					; Get DAFBBase into A1 for below.
+				
+;
+; See what we need to do…
+;
+				Tst.b	csMode(A2)							; If csMode = 0, then we are
+				Beq.s	@EnablePageMode						;	enabling page mode.
+				
+				Move.b	#0,pageModeSet(A3)					; Say page mode is disaabled.
+				Bclr	#spPageMode,SP_Flags(Sp)			; Flip pRam bit.
+				Bra.s	@EndPageMode						;
+				
+@EnablePageMode	Move.b	#1,pageModeSet(A3)					; Say page mode is enabled.
+				Bset	#spPageMode,SP_Flags(Sp)			; Flip pRam bit.
+							
+@EndPageMode	Move.l	Sp,spsPointer(A0)					; Set up to whack pRam.
+				_sPutPRAMRec								; Whack it.
+				
+				Adda	#SizesPRAMRec+spBlockSize,Sp		; Restore stack.
+				Move.l	DAFB_Config(A1),D0					; Read the DAFBConfig register.
+				Bfextu	D0{dafbWrdIntBit:1},D0				; If word-interleave is on
+				Bne.s	@DisablePageMode					;	then ALWAYS disable page mode.
+				Tst.b	pageModeSet(A3)						; If we’re not supposed to enable page mode,
+				Beq.s	@DisablePageMode					;	then disable it.
+				Moveq	#1,D0								; Otherwise, set up to enable page mode,
+				Bra.s	@HitPageMode						;	and do it.
+@DisablePageMode	
+				Moveq	#0,D0								; Set up to disable page mode, and
+@HitPageMode	Move.l	D0,DAFB_PgMdEn(A1)					;	and do it.
+				
+@ExitPageMode	Move.b	D1,D0								; Set up to switch back into previous mode,
+				_SwapMMUMode								;	do switch, and
+				Bra		DAFBCtlGood							;	leave.
+				
+				EndWith
+			
+DAFBSetNoConnect
+;---------------------------------------------------------------------
+;
+;	SetNoConnect set up the no-connect pRam byte to contain
+;		a valid sense code if a valid sense code is passed
+;		in (csMode).
+;
+;		A1 = Ptr to AuxDCE/Ptr to DAFBMonIDs table (not restored)
+;		A2 = Ptr to cs parameter record
+;		A3 = Ptr to private storage
+;
+;---------------------------------------------------------------------
+				With 	spBlock,DAFBVidPrivates,SP_Params
+				
+;
+; First, set up a slot parameter block on the stack.
+;
+				
+				Suba	#spBlockSize,Sp						; Make an SpBlock on the stack.
+				Move.l	Sp,A0								; Get a pointer to it into A0.
+				Move.b	dCtlSlot(A1),spSlot(A0)				; Set it up.
+				Clr.b	spExtDev(A0)
+				
+;
+; Next, read the current pRam so that we can set it appropriately…
+;
+				
+				Suba	#SizesPRAMRec,Sp					; Make an sPRAM block on the stack.
+				Move.l	Sp,spResult(A0)						; Point to it.
+				_sReadPRamRec								; Get pRAM.
+				
+;
+; See what we need to do…
+;
+				Move.b	csMode(A2),D1						; Get the monID.
+				Cmp.b	#indexedNoConnect,D1				; If it’s one of the no-connect codes, 
+				Beq.s	@ClearIt							;	then zero-out the no-connect pRam byte.
+				Cmp.b	#extendedNoConnect,D1				; 	
+				Beq.s	@ClearIt							;
+				Lea		DAFBMonIDs,A1						; Get ptr to DAFBMonIDs table.
+				Move.w	(A1)+,D0							; Get count of modes.
+				
+@ValidLoop		Move.b	(A1)+,D1							; Get an ID from the table.
+				Cmp.b	csMode(A2),D1						; If we have a match,
+				Beq.s	@FoundMatch							;	say so.
+				Dbra	D0,@ValidLoop						; Otherwise, keep looping thru
+				Bra.s	@MonIDNotValid						; 	table until no match is found.
+		
+@FoundMatch		Tst.b	csMode+1(A2)						; If this is not an extended code,
+				Beq.s	@WriteIt							; 	then just do write.
+				Cmp.b	#extendedSenseVGA,D1				; Is it the VGA code?
+				Bne.s	@TryPal								; Nope, try PAL.
+				Move.b	#indexedSenseVGA,D1
+				Bra.s	@WriteIt
+@TryPal			Cmp.b	#extendedSensePAL,D1				; Is it the PAL code?
+				Bne.s	@TryPALBox							; Nope, try PAL encoder box.
+				Move.b	#indexedSensePAL,D1
+				Bra.s	@WriteIt
+				
+@TryPALBox		Cmp.b	#extendedSensePALBox,D1				; Is it the PAL encoder box code?
+				Bne.s	@TryNTSC							; Nope, try NTSC encoder box.
+				Move.b	#indexedSensePAL,D1	
+				Bra.s	@WriteIt
+				
+@TryNTSC		Cmp.b	#extendedSenseNTSC,D1				; Is it the NTSC encoder box code?
+				Bne.s	@TryGF								; Nope, try GoldFish.
+				Move.b	#indexedSenseNTSC,D1
+				Bra.s	@WriteIt
+				
+@TryGF			Cmp.b	#extendedSenseGF,D1					; Is it the GoldFish?
+				Bne.s	@Try19								; Nope, try 19”.
+				Move.b	#indexedSenseGF,D1					;
+				Bra.s	@WriteIt
+				
+@Try19			Cmp.b	#extendedSense19,D1					; Is it a 19”?
+				Bne.s	@WriteIt							; Nope, must be indexed.
+				Move.b	#indexedSense19,D1
+@WriteIt		Move.b	D1,SP_NoConnect(Sp)					; Write out monID to pRam record.
+				Ori.b	#spNCValidMask,SP_NoConnect(Sp)		; Validate it.
+				Bra.s	@WritePRam
+@ClearIt		Clr.b	SP_NoConnect(Sp)					; Invalidate no-connect byte.
+				
+@WritePRam		Move.l	Sp,spsPointer(A0)					; Set up to whack pRam.
+				_sPutPRAMRec								; Whack it.
+				
+				Adda	#SizesPRAMRec+spBlockSize,Sp		; Restore stack.
+				Bra		DAFBCtlGood							;	leave.
+				
+@MonIDNotValid	Adda	#SizesPRAMRec+spBlockSize,Sp		; Restore stack.
+				Bra		DAFBCtlBad							;	leave with error.
+**********************************************************************
+*
+* VideoClose releases the device's private storage and removes the 
+*		interrupt handler.
+*
+*
+* Entry:	A0 = param block pointer
+*			A1 = AuxDCE pointer
+*
+* Other:	A2 = temporary AuxDCE pointer copy
+*
+**********************************************************************
+	
+DAFBVidClose		
+				WITH 		DAFBVidPrivates
+			
+				MOVE.L	dCtlStorage(A1),A3					; A3 <- Ptr to private storage
+				MOVE.L	(A3),D0								;
+				_StripAddress								;
+				MOVE.L	D0,A3								;
+				
+				BSR		DAFBDisableVGuts					; call utility to deactivate interrupts
+			
+				Moveq	#true32b,D0							; Set up to flip into 32-bit addressing.
+				_SwapMMUMode								; Flip.
+				DAFBIdle saveDAFBBase(A3)					; Put DAFB in an idle state.
+				_SwapMMUMode								; Restore previous addressing mode.
+	
+				MOVE.L	saveSQElPtr(A3),A0					; get the slot interrupt queue element ptr
+				_DisposPtr
+				
+				MOVE.L	saveGamDispPtr(A3),A0				; get pointer to gamma table block
+				_DisposPtr									; and dispose it
+				
+				Move.l	saveVidPtr(A3),A0					; Get pointer to video parameters block,
+				_DisposPtr									;	and dispose of it.
+				
+				MOVE.L	dCtlStorage(A1),A0					; dispose of the private storage
+				_DisposHandle								;
+	
+				MOVEQ	#noErr,D0							; no error
+				RTS											; and return
+				
+				ENDWITH
+**********************************************************************
+*
+* Video Driver Status Call Handler.  There are ten standard calls:
+*
+*	($00) Error
+*	($01) Error
+*	($02) GetMode
+*	($03) GetEntries
+*	($04) GetPage
+*	($05) GetPageBase
+*	($06) GetGray
+*	($07) GetInterrupt
+*	($08) GetGamma
+*	($09) GetDefaultMode
+*
+* The following calls are DAFB-specific:
+*
+*	($80) GetSyncOnGreen
+*	($82) GetPageMode
+*	($83) GetNoConnect
+*
+*   Entry: 	A0 		= paramblock pointer
+*			A1 		= AuxDCE pointer
+*	Uses:	A2		= cs parameters
+*			A3 		= pointer to private storage
+*			D0-D3 	= scratch (don't need to be preserved)
+*
+*	Exit:	D0	  	= error code
+*
+**********************************************************************
+DAFBVidStatus	
+				MOVEM.L	A0/A1,-(SP)							; Save exit registers.
+				
+				MOVE.L	csParam(A0),A2						; A2 <- Ptr to control parameters
+			
+				MOVE.L	dCtlStorage(A1),A3					; A3 <- Ptr to private storage
+				MOVE.L	(A3),D0								;
+				_StripAddress								;
+				MOVE.L	D0,A3								;
+				MOVE.W	csCode(A0),D0						; get routine selector
+				
+				Cmp.w	#cscSyncOnGreen,D0					; If we got the GetSyncOnGreen call,
+				Beq		DAFBGetSyncOnGreen					;	hop to it.
+				Cmp.w	#cscPageMode,D0						; If we go the PageMode call,
+				Beq		DAFBGetPageMode						;	hop to it.
+				Cmp.w	#cscNoConnect,D0					; If we got the NoConnect call,
+				Beq		DAFBGetNoConnect					;	hop to it.
+				
+				CMP.W	#9,D0								;IF csCode NOT IN [0..9] THEN
+				BHI.S	DAFBStatBad							;  Error, csCode out of bounds.
+				MOVE.W	DAFBStatJumpTbl(PC,D0.W*2),D0		;Get the relative offset to the routine.
+				JMP		DAFBStatJumpTbl(PC,D0.W)			;GOTO the proper routine.
+				
+DAFBStatJumpTbl
+				DC.W	DAFBStatBad-DAFBStatJumpTbl			;$00 => Error
+				DC.W	DAFBStatBad-DAFBStatJumpTbl			;$01 => Error
+				DC.W	DAFBGetMode-DAFBStatJumpTbl			;$02 => GetMode
+				DC.W	DAFBGetEntries-DAFBStatJumpTbl		;$03 => GetEntries
+				DC.W	DAFBGetPage-DAFBStatJumpTbl			;$04 => GetPage
+				DC.W	DAFBGetPageBase-DAFBStatJumpTbl		;$05 => GetPageBase
+				DC.W	DAFBGetGray-DAFBStatJumpTbl			;$06 => GetGray
+				DC.W	DAFBGetInterrupt-DAFBStatJumpTbl	;$07 => GetInterrupt
+				DC.W	DAFBGetGamma-DAFBStatJumpTbl		;$08 => GetGamma
+				DC.W	DAFBGetDefaultMode-DAFBStatJumpTbl	;$09 => GetDefaultMode
+DAFBStatBad		MOVEQ	#statusErr,D0						; else say we don't do this one
+				BRA.S	DAFBStatDone						; and return
+			
+DAFBStatGood	MOVEQ	#noErr,D0							; return no error
+DAFBStatDone	MOVEM.L	(SP)+,A0/A1							; Restore exit registers.
+				BRA		DAFBExitDrvr
+DAFBGetMode
+;---------------------------------------------------------------------
+;
+;	Return the current mode
+;
+;		Inputs : A2 = pointer to csParams
+;				 A3 = pointer to private storage
+;
+;---------------------------------------------------------------------
+				WITH	DAFBVidPrivates
+		
+				MOVE.W	saveMode(A3),csMode(A2)				; return the mode
+				Clr.w	csPage(A2)							; return the page number (always 0)
+			
+				Move.l	saveScreenBase(A3),csBaseAddr(A2)	; Return the ST-corrected screen baseAddr.
+				BRA.S	DAFBStatGood						; => return no error
+	
+				ENDWITH
+DAFBGetEntries
+;---------------------------------------------------------------------
+;
+;	Read the current contents of the CLUT.  These values were gamma corrected
+;	when they were set (by DAFBSetEntries), so they may not match the source
+;	cSpec array.
+;
+;		Inputs : A1 = pointer to AuxDCE
+;				 A2 = pointer to csParams/CLUT read register (not restored to csParams)
+;				 A3 = pointer to private storage
+;
+;---------------------------------------------------------------------
+				Movem.l	D4-D6,-(Sp)							; Save work registers.
+				Tst.l	-(Sp)								; Make some room.
+				
+				Move.l	csTable(A2),D0						; If we were handed a nil pointer,
+				Beq		@GEErr								; 	then hike.
+				_StripAddress								; Make table pointer 32-bit clean.
+				Move.l	D0,(Sp)								; And save it.
+				Move.w	saveMode(A3),D1						; Get the current video mode.
+				Sub.w	#firstVidMode,D1					; Convert it to an index.
+				Move.l	D1,D6								; Save it for later.
+				
+				Move.w	GFlags(A3),D5						; Get the flags for quick access.
+				
+				Cmp.w	#FifthVidMode-FirstVidMode,D6		; If this is not 16bpp mode,
+				Bne.s	@ChkRange							;	then just go do the range check.
+				Bset	#UseTrans,D5						; Otherwise, remember to do translation.
+@ChkRange		Lea		DAFBClutTbl,A0						; Point to little table of counts.
+				Moveq	#0,D3								; Set up to get count.
+				Move.b	(A0,D1.w),D3						; Get clut count.
+						
+				Move.w	csCount(A2),D4						; Get the number of entries to fill,
+				Bmi.s		@GEErr								; 	and hike if it’s out of range.
+				Cmp.w	D3,D4								; If D4-D3 > 0 (count > entries),
+				Bhi.s		@GEErr								;	then hike.
+				Move.w	D4,D2								; Otherwise, copy the count.
+			
+				Cmp.w	#indexEntries,csStart(A2)			; If table accesses are to be indexed,
+				Beq.s	@GECom								; 	then go on.
+			
+				Move.w	D4,D1								; Otherwise, sequence thru table from
+				Add.w	csStart(A2),D2						; 	csStart thru csCount entries.
+			
+; The following code is BAD, BAD, BAD!  We should build our own table here so
+;	as to NOT mess up the user’s data.  But all the previous Apple video drivers
+;	have done the same thing here, so we’ll continue the trend for now.
+				Move.l	(Sp),A0								; Get ptr to csTable.
+@TableLoop		Move.w	D2,value(A0,D1*colorSpecSize)		; Write the index into the table.
+				Subq	#1,D2								; Decrement index.
+				Dbra	D1,@TableLoop						;
+			
+@GECom			Moveq	#true32b,D0							; Save previous MMU mode and set MMU to
+				_SwapMMUMode								;	32-bit addressing when dealing with DAFB.
+				
+				Move.l	(Sp)+,A0							; Get/restore ptr to csTable.
+				Move.l	saveVDACBase(A3),A2					; Get ACDC base address.
+				Add.l	#ACDC_DataReg,A2					; Add offset to Clut read register.
+						
+				Move.w	Sr,-(Sp)							; Save current interrupt level
+				Bsr		DAFBWaitVSync						; Wait for VBL.
+@Repeat			Move.w	value(A0),D1						; Get the NEXT Clut position into D1.
+				Cmp.w	D3,D1								; If this position is out of range,
+				Bhi.s	@Until								; 	then go on.
+			
+				Btst	#UseTrans,D5						; If we’re not supposed to translate this index,
+				Beq.s	@Index								;	then just go on.
+				Bsr		DAFBTrans5to8						; Otherwise, do translation.
+				
+@Index			Move.l	D1,ACDC_AddrReg-ACDC_DataReg(A2)	; Tell the Clut where to read from.
+			
+				Move.l	(A2),D1								; Get Red:
+				Move.b	D1,rgb+red(A0)						; 	--> $rrXX
+				Move.b	D1,rgb+red+1(A0)					;	--> $rrrr
+			
+				Move.l	(A2),D1								; Get Green:
+				Move.b	D1,rgb+green(A0)					;	--> $ggXX
+				Move.b	D1,rgb+green+1(A0)					;	--> $gggg
+			
+				Move.l	(A2),D1								; Get Blue:
+				Move.b	D1,rgb+blue(A0)						;	--> $bbXX
+				Move.b	D1,rgb+blue+1(A0)					;	--> $bbbb
+			
+@Until			Addq	#colorSpecSize,A0					; Point to next entry ColorTable.
+				Dbra	D4,@Repeat
+			
+				Move.w	(Sp)+,Sr							; Restore previous interrupt level.
+				_SwapMMUMode								; Restore previous addressing mode.
+				
+				Movem.l	(Sp)+,D4-D6							; Restore work registers.
+				Bra		DAFBStatGood						; Return noError.
+			
+@GEErr			Tst.l	(Sp)+								; Clean up stack.
+				Movem.l	(Sp)+,D4-D6							; Restore work registers.
+				Bra		DAFBStatBad							; Return statError.
+DAFBGetPage
+;---------------------------------------------------------------------
+;
+;	Return the number of pages in the specified mode.  It's pretty simple;
+;		every mode has only one page.  We do check if it's valid, however.
+;
+;---------------------------------------------------------------------
+			
+				WITH	DAFBVidPrivates
+		
+				MOVE	csMode(A2),D1						; get the mode
+				MOVE	D1,D2								; keep a copy
+				BSR		DAFBChkMode							; is this mode OK?
+				BNE		DAFBStatBad							; => not a valid mode
+			
+				MOVE.W	#1,csPage(A2)						; return page count
+				BRA		DAFBStatGood						; => return no error
+				ENDWITH
+		
+DAFBGetPageBase
+;---------------------------------------------------------------------
+;
+;	Return the base address for the specified page in the current mode
+;
+;---------------------------------------------------------------------
+			
+				WITH	DAFBVidPrivates
+		
+				TST.W	csPage(A2)							; are we returning page zero info?
+				BNE		DAFBStatBad							; only page 0 is valid
+				Move.l	saveScreenBase(A3),csBaseAddr(A2)	; Return the ST-corrected screen baseAddr.
+				BRA 	DAFBStatGood						; => return no error
+			
+				ENDWITH
+			
+DAFBGetGray
+;---------------------------------------------------------------------
+;
+;	Return a boolean, set true if luminance mapping is on
+;
+;---------------------------------------------------------------------
+				WITH	DAFBVidPrivates
+		
+				MOVEQ	#0,D1								; set up for BFEXTU
+DAFBGetFlagCom
+			
+				BFEXTU	GFlags(A3){D1:1},D0					; get the state of flag 
+				MOVE.B	D0,csMode(A2)						; return value
+				BRA		DAFBStatGood						; => and return
+			
+				ENDWITH
+		
+DAFBGetInterrupt
+;---------------------------------------------------------------------
+;
+;	Return a boolean in csMode, set true if VBL interrupts are disabled
+;
+;---------------------------------------------------------------------
+				WITH	DAFBVidPrivates
+		
+				MOVEQ	#1,D1								; set up BFEXTU to point at IntDisFlag
+				BRA.S	DAFBGetFlagCom						; and use common code			
+			
+				ENDWITH
+DAFBGetGamma
+;---------------------------------------------------------------------
+;
+;	Return the pointer to the current gamma table
+;
+;---------------------------------------------------------------------
+				WITH	DAFBVidPrivates
+		
+				MOVE.L	saveGammaPtr(A3),csGTable(A2)		; return the pointer to the structure
+				BRA		DAFBStatGood						; and return a good result
+			
+				ENDWITH
+DAFBGetDefaultMode
+;---------------------------------------------------------------------
+;
+;	Read the card default mode from slot pRAM.
+;
+;		A1 = Ptr to AuxDCE
+;		A2 = Ptr to cs parameter record
+;		A3 = Ptr to private storage
+;
+;---------------------------------------------------------------------
+				WITH 	spBlock,DAFBVidPrivates,SP_Params
+;
+; Set up a slot parameter block on the stack.
+;
+	
+				SUBA	#spBlockSize,SP						; make an slot parameter block on stack
+				MOVE.L	SP,A0								; get pointer to parm block now
+				MOVE.B	dCtlSlot(A1),spSlot(A0)				; put slot in pBlock
+				CLR.B	spExtDev(A0)						; external device = 0
+;
+; Read the slot pRAM to determine what the currently saved mode is.  The first
+;	byte is the board ID, followed by the default mode.  Built-in video keeps the last 
+;	selected video sRsrc spID in VendorUse2.
+;
+				
+				SUBA	#SizesPRAMRec,SP					; allocate block for pRAM record
+				MOVE.L	SP,spResult(A0)						; point to it
+				_sReadPRAMRec								; read it
+				MOVE.B	SP_LastConfig(SP),csMode(A2)		; return the result
+				ADDA	#SizesPRAMRec+spBlockSize,SP		; release buffer
+				BRA		DAFBStatGood						;
+				ENDWITH
+				
+DAFBGetSyncOnGreen
+;---------------------------------------------------------------------
+;
+;	Return a boolean in csMode, set true if sync-on-green is disabled.
+;
+;---------------------------------------------------------------------
+				With	DAFBVidPrivates
+				
+				Btst	#syncOnGreen,GFlags(A3)				; If we’re putting sync on green,
+				Bne.s	@IsOn								;	then return enabled state.
+				Move.b	#1,csMode(A2)						; Otherwise, return disabled.
+				Bra		DAFBStatGood
+				
+@IsOn
+				Clr.b	csMode(A2)							; Return enabled state.
+				Bra		DAFBStatGood
+				
+				EndWith
+				
+DAFBGetPageMode
+;---------------------------------------------------------------------
+;
+;	Return a boolean in csMode, set true if page mode is disabled.
+;
+;---------------------------------------------------------------------
+				With 	DAFBVidPrivates
+				
+				Moveq	#true32b,D0							; Set up to switch into 32-bit mode,
+				_SwapMMUMode								; 	do switch, and
+				Move.b	D0,-(Sp)							; 	save previous mode.
+				
+				Move.l	saveDAFBBase(A3),A0					; Get DAFBBase into A0.
+				Move.l	DAFB_PgMdEn(A0),D0					; Get page mode.
+				Btst	#0,D0								; If page mode is on,
+				Bne.s	@IsOn								;	then return enabled state.
+				Move.b	#1,csMode(A2)						; Otherwise, return disabled,
+				Bra.s	@EndPageMode						;	and leave.
+				
+@IsOn			Clr.b	csMode(A2)							; Return enabled state.
+@EndPageMode	Move.b	(Sp)+,D0							; Set up to switch back into previous mode,
+				_SwapMMUMode								;	do switch, and
+				Bra		DAFBCtlGood							;	leave.
+				
+				EndWith
+DAFBGetNoConnect
+;---------------------------------------------------------------------
+;
+;	Returns a monID code or the extended sense no-connect value.  It
+;		should be noted that we cannot disguish between PAL &
+;		NTSC monitors & encoder boxes once DAFBSetNoConnect has
+;		been called (because both the monitor & box codes are
+;		mapped into the same indexedSense code).
+;
+;---------------------------------------------------------------------
+				With	spBlock,DAFBVidPrivates,SP_Params
+				
+;
+; First, set up a slot parameter block on the stack.
+;
+				
+				Suba	#spBlockSize,Sp						; Make a SpBlock on the stack.
+				Move.l	Sp,A0								; Get a pointer to it into A0.
+				Move.b	dCtlSlot(A1),spSlot(A0)				; Set it up.
+				Clr.b	spExtDev(A0)
+				
+;
+; Next, read the current pRam so that we can determine whether the
+;	no-connect code is valid or not.
+;
+				
+				Suba	#SizesPRAMRec,Sp					; Make an sPRAM block on the stack.
+				Move.l	Sp,spResult(A0)						; Point to it.
+				_sReadPRamRec								; Get pRAM.
+				
+				Move.b	#0,csMode+1(A2)						; Assume non-extended (indexed) for now.			
+				
+				Move.b	SP_NoConnect(Sp),D0					; Get the no-connect byte.
+				Andi.b	#spNCValidMask,D0					; If it is valid,
+				Bne.s	@Valid								;	return it.
+				Move.b	#indexedNoConnect,csMode(A2)		; Otherwise, return the indexed no-connect code,
+				Bra.s	@Exit								;	 and leave.
+				
+@Valid			Move.b	SP_NoConnect(Sp),D0					; Get the no-connect byte again.
+				Andi.b	#spNoConnectMask,D0					; Strip the validation code.
+				
+				Cmp.b	#indexedSenseVGA,D0					; Is it the VGA code?
+				Bne.s	@TryPal								; Nope, try PAL.
+				Move.b	#extendedSenseVGA,D0
+				Bra.s	@WriteExtended
+@TryPal			Cmp.b	#indexedSensePAL,D0					; Is it the PAL code?
+				Bne.s	@TryGF								; Nope, try GoldFish.
+				Move.b	#extendedSensePAL,D0
+				Bra.s	@WriteExtended
+								
+@TryGF			Cmp.b	#indexedSenseGF,D0					; Is it the GoldFish code?
+				Bne.s	@Try19								; Nope, try 19”.
+				Move.b	#extendedSenseGF,D0
+				Bra.s	@WriteExtended
+				
+@Try19			Cmp.b	#indexedSense19,D0					; Is it the 19” code?
+				Bne.s	@WriteIt							; No, so just use indexed.
+				Move.b	#extendedSense19,D0	
+				
+@WriteExtended	Move.b	#1,csMode+1(A2)						; Say code is extended.
+@WriteIt		Move.b	D0,csMode(A2)						; Return valid monID.
+@Exit			Adda	#SizesPRAMRec+spBlockSize,Sp		; Restore stack, and
+				Bra		DAFBStatGood						;	go home.
+;---------------------------------------------------------------------
+;
+;	Exit from Control or Status.
+;
+;	 	A0 = Ptr to param block.
+;		A1 = Ptr to AuxDCE.
+;		D0 = error code.
+;
+;---------------------------------------------------------------------
+DAFBExitDrvr	BTST	#NoQueueBit,ioTrap(A0)				; no queue bit set?
+				BEQ.S	DAFBGoIODone						; => no, not immediate
+				RTS 										; otherwise, it was an immediate call
+DAFBGoIODone	MOVE.L	JIODone,-(Sp)						; Get the IODone address,
+				Rts											; 	and go there.
+;=====================================================================
+;
+;	Utilities
+;
+;=====================================================================
+;---------------------------------------------------------------------
+; 
+;	CalcScreenBaseAddr
+;
+;	Returns the proper screen base address for the current page
+;	and mode.
+;
+; 	 -> A3: Pointer to driver privates, saveMode(A3) & saveVidPtr(A3) must be set up!
+;
+DAFBCalcScreenBaseAddr
+			With	SC_Params
+	
+			Movem.l	A0-A1/D1,-(Sp)							; Save work registers.
+	
+			Move.w	saveMode(A3),D1							; Get current video mode.
+			Sub.w	#firstVidMode,D1						; Make it an index.
+	
+			Move.l	saveVidPtr(A3),A1						; Get video parameters.
+			Mulu	#DepthSize+ScreenSize,D1				; Index to the correct parameter group.
+			Lea		ClockSize+MiscSize+DepthSize(A1,D1),A1	; Point to screen graying parameters.
+	
+			Move.l	saveBaseAddr(A3),A0						; Get the vRam base address.
+			Adda.l	SC_BaseOffset(A1),A0					; Point to the screen,
+			Move.l	A0,saveScreenBase(A3)					;	and save it.
+	
+			Movem.l	(Sp)+,A0-A1/D1							; Restore work registers.
+			Rts
+	
+			EndWith											; SC_Params
+			
+;---------------------------------------------------------------------
+; 
+;	Trans5to8
+;
+;	The ACDC that supports 16bpp (AC842A) does so in a somewhat unique
+;	fashion.  That is, it uses a sparse 8-bit CLUT.  The
+;	translation forumla is as follows:
+;
+;			5-bits [4..0] -> 8-bits [4..04..2].
+;
+; 	<-> D1:  5-bit value to be converted into an 8-bit index.
+;
+DAFBTrans5to8
+			Move.l	D0,-(Sp)								; Save D0 as scratch.
+			Moveq	#0,D0									; Clear it.
+			
+			Move.w	D1,D0									; D1 = ---43210, D0 = ---43210.
+			Lsl.w	#3,D1									; D1 = 43210---, D0 = ---43210.
+			Lsr.w	#2,D0									; D1 = 43210---, D0 = -----432.
+			Or.w	D0,D1									; D1 = 43210432.
+			
+			Move.l	(Sp)+,D0								; Restore D0.
+			Rts
+;---------------------------------------------------------------------
+;
+;	ChkMode
+;
+;	Verifies the requested mode is legal.  Converts spID in D1 into 
+;	zero-based mode number since lots of people want it that way.
+;
+;	<->	D1: Mode
+;	->	A3:	Pointer to driver privates
+;
+;	All registers preserved
+;
+;	Returns EQ if mode is valid.
+;
+DAFBChkMode
+			Movem.l	A0/D0,-(Sp)								; Save work registers.			
+			
+			Sub.w	#FirstVidMode,D1						; Make mode zero-based.
+			Blt.s	@ModeBad								; If the passed-in mode is < 0,
+															;	then punt.
+					
+; For DAFB, all the ‘a’ modes are even and all the ‘b’ modes are odd.  So, we just check
+; the oddness or evenness of the spID to determine whether the passed in mode is OK. 
+;
+			Move.l	saveVidPtr(A3),A0						; Get pointer to video params.
+			Adda.w	#ClockSize,A0							; Point to MiscParams.
+			
+			Move.b	saveSlotID(A3),D0						; Get functional sRsrcID of display.		
+						
+			Btst	#0,D0									; If the display is in ‘a’ mode,
+			Beq.s	@MakeA									;	then say so.
+			Bra.s	@MakeB									; Otherwise, make it a ‘b’ mode.
+			
+@MakeA		Moveq	#0,D0									; Say it’s an ‘a’ mode.
+			Bra.s	@MaxMode
+@MakeB		Moveq	#1,D0									; Say it’s a  ‘b’ mode.
+				
+@MaxMode	Move.b	(A0,D0),D0								; Get maximum mode for the current display.
+			Sub.w	#FirstVidMode,D0						; Make max mode zero-based.
+			Cmp.w	D0,D1									; If the passed in mode is > max mode,
+			Bgt.s	@ModeBad								;	then punt.
+@ModeOK		Cmp.w	D1,D1									; Set Eq when OK.
+@ModeBad	
+@EndChkMode	Movem.l	(Sp)+,A0/D0								; Restore work registers.
+			Rts
+	
+;---------------------------------------------------------------------
+;
+;	Wait for vertical blanking.  Interrupts are raised to level-2 around
+;	this routine.  
+;
+;	IMPORTANT! - This routine expects to be called in 32-bit addressing mode!!!!
+;
+;   A1 = AuxDCE POINTER
+;	A3 = pointer to private storage
+;---------------------------------------------------------------------
+DAFBWaitVSync	
+			MOVE.L	A0,-(SP)								; Save work registers.
+			MOVE.L	D0,-(SP)								;   (Two MOVEs are faster than a MOVEM.)
+			
+			MOVE.W	SR,-(SP)								; Get the status register on stack.
+			MOVEQ	#7,D0									; Get mask into D0.
+			AND.B	(SP),D0									; Get the interrupt level.
+			SUBQ.B	#2,D0									; 
+			BGE.S	@OK										; If ≥, then don't change.
+			ORI.W	#$0200,SR								; Raise above level-2.
+			ANDI.W	#$FAFF,SR								; Make it level-2
+@OK
+			Tst.w	(Sp)+									; Restore stack.
+			
+			MOVE.L	saveDAFBBase(A3),A0						; Point to DAFB.
+			CLR.L	Swatch_ClrCrsrInt(A0) 					; Otherwise, clear the interrupt, just in case,
+															;   since the interrupt handler
+															;	can’t get called here.
+			DAFBResetDelay A0								; (Wait for CLR to propagate.)
+			
+			Move.l	Swatch_Mode(A0),D0						; Look at the Swatch configuration register.
+			Btst	#0,D0									; If it is not enabled, then
+			Bne.s	@Done									;	don’t wait, or we’ll hang!
+			
+@WaitForVBL	MOVE.L	Swatch_IntStat(A0),D0					; Get the VBL status.
+			BTST	#dafbIntStatusBit,D0					; If VBL has NOT occurred,
+			BEQ.S	@WaitForVBL								; 	then just spin.
+															
+@Done		MOVE.L	(SP)+,D0								; Restore work registers.
+			MOVE.L	(SP)+,A0								;   (Two MOVEs are faster than a MOVEM.)
+			RTS
+;---------------------------------------------------------------------
+;
+; SetDepth sets the DAFB frame buffer depth, and returns the 
+;	frame buffer base in driver privates
+;
+; D1 contains the spID of the depth - $80 (the zero based mode ID)
+; A1 = AuxDCE POINTER
+; A2 = parameter block pointer
+; A3 = dCtlStorage pointer
+;
+; Preserves all registers
+;
+;---------------------------------------------------------------------
+DAFBSetDepth	
+			WITH 		DAFBVidPrivates
+			MOVEM.L		D0-D2/A0-A2/A4,-(SP)				; save regs we are using
+												
+			MOVE.L		saveDAFBBase(A3),A4					; get the DAFB base address
+			MOVE.L		saveVidPtr(A3),A1					; get a pointer to the screen depth parameters			
+			MOVE.W		D1,D2								; copy the index
+			MULU		#DepthSize+ScreenSize,D2			; index to the correct parameter group
+			LEA			ClockSize+MiscSize(A1,D2),A1		; point to the setup parameters 
+			MOVEQ		#true32b,D0							; flip to 32-bit mode
+			_SwapMMUMode									;
+			MOVE.B		D0,-(SP)							; save previous addressing mode
+		
+; DAFB setup				
+;•••
+			MOVE.L		A4,A2								; copy the DAFB base again
+;•••
+			MOVE.W		#DAFB_ParmSize-1,D2					; get the counter for the DAFB parameters
+@0			MOVE.W		(A1)+,D0							; get the parameter
+			MOVE.L		D0,(A2)+							; write the parameter and increment
+			DBRA		D2,@0
+			
+			DAFBSpeedDR	A4									; Reconfigure DAFB for the right CPU speed.
+; Swatch setup
+;•••
+			MOVE.L		A4,A2								; copy the DAFB base again
+;•••
+			ADDA		#Swatch_BaseOffset,A2				; advance to Swatch first register
+			MOVE.W		(A1)+,D0							; get the first register
+			MOVE.L		D0,(A2)								; write first register
+			ADDA		#Swatch_BaseOffset1-Swatch_BaseOffset,A2	; advance to register set 
+			MOVE.W		#Swatch_ParmSize1-1,D2						; get the counter for Swatch setup
+@1			MOVE.W		(A1)+,D0									; get the Swatch parameter
+			MOVE.L		D0,(A2)+									; set up Swatch
+			DBRA		D2,@1										; set them up
+			
+; ACDC configuration setup
+;•••
+			MOVE.L		A4,A2								; copy the DAFB base again
+;•••
+			Clr.l		ACDC_AddrReg(A4)					; Tell ACDC to use PCBR0.
+			Adda		#ACDC_ConfigReg,A2					; Advance to ACDC config register.
+			Move.w		(A1)+,D0							; Get the parameter.
+			Move.l		D0,(A2)								; Write it.
+			Tst.l		ACDC_AddrReg(A4)					; Read the addr reg to make it stick (AC842A).
+			
+			DAFB16Bpp	D1									; Do 16bpp “magic,” if necessary.
+			Move.l		DAFB_ClkCfg(A4),D0					; Get the current clock configuration.
+			Btst		#dafbPixSel1,D0						; If PIXSEL1 is not zero, then
+			Bne.s		@SyncOnGreen						;	just go on.
+			
+			Clr.l		ACDC_AddrReg(A4)					; Tell ACDC to use PCBR0.
+			Move.l		ACDC_ConfigReg(A4),-(Sp)			; Save PCBR0 for later.
+			Move.l		#6,ACDC_ConfigReg(A4)				; Put ACDC into indirect mode.
+			Move.l		#1,ACDC_AddrReg(A4)					; Tell ACDC to use PCBR1.
+			Move.l		ACDC_ConfigReg(A4),D0				; Save the current configuration.
+			Bset		#acdcPCS,D0							; Set up to use the LD clock signal.
+			Move.l		D0,ACDC_ConfigReg(A4)				; Write PCBR1 back out with LD clock on.
+			Clr.l		ACDC_AddrReg(A4)					; Tell ACDC to use PCBR0 again.
+			Move.l		(Sp)+,ACDC_ConfigReg(A4)			; Restore PCBR0.
+			
+; Sync On Green…
+;
+@SyncOnGreen			
+			Move.l		DAFB_ClkCfg(A4),D0					; Get the current Clock config value.
+			Btst		#syncOnGreen,GFlags(A3)				; If we’re supposed to put sync on green,
+			Bne.s		@EnableSyncOnGreen					;	then hop to it.
+			Moveq		#0,D1								; Otherwise, set up for disabling.
+			Bra.s		@SyncOnGreenCommon
+	
+@EnableSyncOnGreen
+			Moveq		#1,D1								; Set up for enabling.
+@SyncOnGreenCommon				
+			Bfins		D1,D0{dafbSyncOnGreen:1}			; Toggle the sync-on-green bit appropriately,
+			Move.l		D0,DAFB_ClkCfg(A4)					;	apply it.
+; Everything's configured, so do the DAFB reset sequence after waiting for vSync to happen.
+;	
+@DoReset
+			Move.w		Sr,-(Sp)							; Save the current interrupt level.
+			BSR			DAFBWaitVSync						; Wait for the next VBL.
+			Move.w		(Sp)+,Sr							; Restore the interrupt level.
+			DAFBReset	A4									; Reset DAFB.
+				
+			MOVE.B		(SP)+,D0							; get the previous addressing mode back
+			_SwapMMUMode									;
+			MOVEM.L		(SP)+,D0-D2/A0-A2/A4				; restore all regs
+			RTS												; return
+	
+			ENDWITH			
+				
+;---------------------------------------------------------------------
+;
+;	Fill the screen with a 50% dithered gray pattern.  To have gotten here
+;		we must have had a valid display connected, so there are not tests
+;		for inactive displays here.
+;
+;			D1 = spID of screen depth - FirstVidMode
+;			A3 = driver private storage
+;
+;	All registers are preserved
+;
+DAFBGrayScreen
+			MOVEM.L		A0-A2/D0-D7,-(SP)
+			
+			Move.w		D1,D7								; Save vidMode for later.
+			
+			LEA			DAFBPats,A0							; point to the pattern table
+			MOVE.L		(A0,D1*4),D4						; get the graying pattern
+						
+			MOVE.L		D4,D5								; copy it 
+			MOVEQ		#IndexedBlack,D6					; assume an indexed mode for now
+			MOVE.L		saveBaseAddr(A3),A2					; get the screen base address
+			
+			CMP.W		#FifthVidMode-FirstVidMode,D1		; is this a direct mode?
+			BLT.S		@StartGray							; if not, go on
+			Cmp.w		#FifthVidMode-FirstVidMode,D1		; If this is 16bpp mode, then
+			Beq.s		@Skip32bpp							;	the data fits in one long.
+			Not.l		D5									; Otherwise, invert this half for white.
+@Skip32bpp	MOVEQ		#DirectBlack,D6						; get direct black for ST borders
+						
+@StartGray	MOVE.L		saveVidPtr(A3),A1					; point to video parameters
+			MULU		#DepthSize+ScreenSize,D1			; index to the correct parameter group
+			LEA			ClockSize+MiscSize+DepthSize(A1,D1),A1 ; point to the screen graying parameters
+						
+			MOVEQ		#true32b,D0							; flip to 32-bit mode
+			_SwapMMUMode									;
+			MOVE.B		D0,D2								; save previous addressing mode
+			
+; Do top of screen…
+;
+;	Note that SC_BorderHeight is adjusted to work correctly for both bordered and non-bordered screens.
+;	Specifically, this constant is not “-1”-adjusted for Dbra, so we jump into the tail end of the Dbra
+;	loop and therefore have the “right” thing happen.  My head hurts now, and I hope yours does.
+;
+			With		SC_Params
+			
+DAFBDoGray
+								
+			Move.b		saveSlotID(A3),D3					; Get the SlotID into a convenient register.
+			
+			Cmp.b		#sRsrc_Vid_DAFB_GS,D3				; If we’re on a Rubik display, then
+			Beq.s		@FixRubik1bpp						;	see if we need to do fix.
+				
+			Cmp.b		#sRsrc_Vid_DAFB_NTSCconvST,D3		; If we’re on an NTSC convolved display,
+			Beq.s		@FixNTSCPALTop						;	then apply fix.
+			Cmp.b		#sRsrc_Vid_DAFB_NTSCconvFF,D3
+			Beq.s		@FixNTSCPALTop
+				
+			Cmp.b		#sRsrc_Vid_DAFB_PALconvST,D3		; If we’re on a PAL convolved display,
+			Beq.s		@FixNTSCPALTop						;	then apply fix.
+			Cmp.b		#sRsrc_Vid_DAFB_PALconvFF,D3
+			Bra.s		@ScreenStart
+				
+@FixRubik1bpp	
+			Move.w		#DAFB_512_RB,D0						; Fix first-line problem on Rubik displays.
+			Bra.s		@FixRow
+	
+@FixNTSCPALTop	
+			Move.w		#DAFB_1024_RB,D0					; Create “false” first line on NTSC/PAL convolved displays.			
+@FixRow		Suba		D0,A2								; Point back one full line.								
+			Lsr.w		#2,D0								; Make loop counter long-word based.
+			Subq		#1,D0								; Subtract 1 for Dbra.
+@BlastRow	Move.l		D6,(A2)+							; Write black out.
+			Dbra		D0,@BlastRow
+@ScreenStart
+			Move.w		SC_BorderHeight(A1),D1				; get number of rows (not -1) to blast back on top
+			Bra.s		@TopSecPrime						; 
+@TopSecFill_V	
+			Move.w		SC_BorderWidth(A1),D0				; get number of longs (-1) to blast black in row
+@TopSecFill_H	
+			Move.l		D6,(A2)+							; blast black to screen
+			Dbra		D0,@TopSecFill_H
+				
+			Adda.w		SC_SkipFactor(A1),A2				; skip to start of next row
+@TopSecPrime
+			Dbra		D1,@TopSecFill_V
+; Do middle of screen…
+;
+;	Unlike the top part, there is always a “middle.”  However, there might be a left and right side (when the
+;	border is appropriate), so the not “-1”-adjusted for Dbra comments that are listed above apply horizontally
+;	here.
+;
+			Move.w		SC_ActiveHeight(A1),D1				; get number of rows (-1) in middle of screen
+				
+@MidSecFill_V				
+			Move.w		SC_BorderSide(A1),D0				; get number of longs (not -1) to blast black in row
+			Bra.s		@MidSecPrime_L
+@MidSecFill_L
+			Move.l		D6,(A2)+							; blast black to screen
+@MidSecPrime_L
+			Dbra		D0,@MidSecFill_L
+				
+			Move.w		SC_ActiveWidth(A1),D0				; get the number of doublelongs (-1) for active middle
+@MidActFill_H	
+			Move.l		D4,(A2)+							; Fill the active section with gray
+			Cmp.b		#sRsrc_Vid_DAFB_SVGAa,D3			; Skip if SuperVGA (800x600 is not an
+			Beq.s		@ChkMode							;	even multiple of 64, but it is an)
+			Cmp.b		#sRsrc_Vid_DAFB_SVGAb,D3			;	even multiple of 32).
+			Beq.s		@ChkMode							;
+			Bra.s		@DoDouble							;
+@ChkMode	Cmp.w		#SixthVidMode-FirstVidMode,D7		; If we’re not doing 32bpp,
+			Bne.s		@SkipDouble							;	then really skip.
+@DoDouble	Move.l		D5,(A2)+							; Otherwise, do second half where applicable.
+@SkipDouble	Dbra		D0,@MidActFill_H		
+				
+			Not.l		D4									; Invert for next line, and
+			Not.l		D5									;	second half if applicable.
+				
+			Move.w		SC_BorderSide(A1),D0				; get number of longs (not -1) to blast black in row
+			Bra.s		@MidSecPrime_R
+@MidSecFill_R
+			Move.l		D6,(A2)+							; blast black to screen
+@MidSecPrime_R
+			Dbra		D0,@MidSecFill_R
+				
+			Add.w		SC_SkipFactor(A1),A2				; move to NEXT line
+			Dbra		D1,@MidSecFill_V
+; Do bottom of screen…
+;
+			Move.w		SC_BorderHeight(A1),D1				; Get number of rows (not -1) to blast back on bottom.
+				
+			Cmp.b		#sRsrc_Vid_DAFB_NTSCconvST,D3		; If we’re on an NTSC convolved display,
+			Beq.s		@FixNTSCPALBot						;	then apply fix.
+			Cmp.b		#sRsrc_Vid_DAFB_NTSCconvFF,D3
+			Beq.s		@FixNTSCPALBot
+				
+			Cmp.b		#sRsrc_Vid_DAFB_PALconvST,D3		; If we’re on a PAL convolved display,
+			Beq.s		@FixNTSCPALBot						;	then apply fix.
+			Cmp.b		#sRsrc_Vid_DAFB_PALconvFF,D3
+			Bra.s		@BotStart
+				
+@FixNTSCPALBot
+			Addq		#1,D1								; For convolved interlace displays, we need to
+															;	blacken the “false” bottom.
+@BotStart		
+			Bra.s		@BotSecPrime						; 
+@BotSecFill_V
+			Move.w		SC_BorderWidth(A1),D0				; get number of longs (-1) to blast black in row
+@BotSecFill_H
+			Move.l		D6,(A2)+							; blast black to screen
+			Dbra		D0,@BotSecFill_H
+				
+			Adda.w		SC_SkipFactor(A1),A2				; skip to start of next row
+@BotSecPrime
+			Dbra		D1,@BotSecFill_V
+				
+			Endwith											; SC_Parms
+							
+			MOVE.B		D2,D0								; get the previous addressing mode back
+			_SwapMMUMode									;
+			
+@GrayExit
+			MOVEM.L		(SP)+,A0-A2/D0-D7					; restore all regs 
+			RTS												; and return
+						
+;---------------------------------------------------------------------
+;
+; DAFBDirectCLUTSet writes gamma-corrected ascending grayscale ramps into
+;	the CLUT
+;
+; A3 = dCtlStorage pointer
+;
+; Preserves all registers used.
+;
+;---------------------------------------------------------------------
+DAFBDirectCLUTSet
+			MOVEM.L		D0-D3/D5/A0/A4-A6,-(SP)				; save registers
+				
+			MOVE.L		saveGammaPtr(A3),A0					; get pointer to gamma data structure
+			MOVE.W		gFormulaSize(A0),D0					; get the size of formula data
+			LEA			gFormulaData(A0),A4					; point to formula data
+			ADD			D0,A4								; red correction table starts here
+			MOVE.L		A4,A5								; get default pointer to green data
+			MOVE.L		A4,A6								; get default pointer to blue data
+				
+			CMP.W		#1,gChanCnt(A0)						; if only only one table, we're set
+			BEQ.S		@OneTbl								; => just one table
+	
+			MOVE		gDataWidth(A0),D1					; get width of each entry in bits
+			ADDQ		#7,D1								; round to nearest byte
+			LSR			#3,D1								; get bytes per entry
+			MULU		gDataCnt(A0),D1						; get size of table in bytes
+	
+			ADDA		D1,A5								; calc base of green
+			ADDA		D1,A6								; calc base…
+			ADDA		D1,A6								; 	…of blue
+	
+@OneTbl		MOVE.W		gDataCnt(A0),D2						; Get number of entries.
+			Subq		#1,D2								; Make it zero based.
+	
+			MOVEQ		#true32b,D0							; flip to 32-bit mode
+			_SwapMMUMode									;
+			MOVE.B		D0,-(SP)							; save previous addressing mode
+				
+			MOVE.L		saveVDACBase(A3),A0					; point to the hardware
+			ADDA		#ACDC_DataReg,A0					; point to data register
+			CLR.L		ACDC_AddrReg-ACDC_DataReg(A0)		; start at the beginning of CLUT
+	
+			Move.w		GFlags(A3),D5						; Get the flags for quick access.
+			
+			Move.w		saveMode(A3),D1						; Get the current mode.
+			Cmp.b		#FifthVidMode,D1					; If we’re not doing 16bpp,
+			Bne.s		@Normbpp							;	then go on.
+			Bset		#UseTrans,D5						; Otherwise, remember to do 5-to-8 translations, 
+			Move.w		#$1F,D2								; 	and whack only 32 entries in 16bpp mode.
+	
+@Normbpp	MOVE.W		SR,-(SP)							; preserve the status register
+			BSR			DAFBWaitVSync						; wait for next blanking period (preserves A0)
+; Write an incrementing grayscale ramp.
+			Moveq		#0,D0								; Init write value.
+			Moveq		#0,D3								; Init ramp start.
+			Moveq		#0,D1								; Init trans index (will be used as a long).
+			
+@Repeat		Move.w		D3,D1								; Get the current ramp/index value.
+			Btst		#UseTrans,D5						; If we don’t need to translate this value,
+			Beq.s		@Index								; 	then just go on.
+			Bsr			DAFBTrans5to8						; Otherwise, convert it, and use it
+			Move.l		D1,ACDC_AddrReg-ACDC_DataReg(A0)	; 	to set the right Clut address.
+@Index		MOVE.B		(A4,D1),D0							; get gamma corrected red
+			MOVE.L		D0,(A0)								; write to data reg
+			MOVE.B		(A5,D1),D0							; get gamma corrected green
+			MOVE.L		D0,(A0)								; write to data reg
+			MOVE.B		(A6,D1),D0							; get gamma corrected blue
+			MOVE.L		D0,(A0)								; write to data reg
+			ADDQ		#1,D3								; increment ramp/index value
+			DBRA		D2,@Repeat							; 
+			
+			MOVE.W		(SP)+,SR							; restore the status reg
+			MOVE.B		(SP)+,D0							; get back previous addressing mode
+			_SwapMMUMode									;
+					
+			MOVEM.L		(SP)+,D0-D3/D5/A0/A4-A6				; restore saved registers
+			RTS
+								
+;-------------------------------------------------------------
+;	The Interrupt handler for the DAFB Built-In Video
+;-------------------------------------------------------------
+; On entry A1 contains the pointer to the driver's private storage
+; D0-D3/A0-A3 have been preserved.
+DAFBBeginIH		
+			MOVEM.L	A0/D1,-(SP)								; save registers
+			MOVEQ	#true32b,D0								; flip to 32-bit addressing mode
+			JSR		([jSwapMMU])							;
+			MOVEM.L	(SP)+,A0/D1								; restore registers
+			MOVE.B	D0,-(SP)								; save current addressing mode
+			
+			MOVE.L	saveDAFBBase(A1),A0						; point to the DAFB chip
+			CLR.L	Swatch_ClrCrsrInt(A0) 					; clear the interrupt
+			MOVE.B	(SP)+,D0								; get the MMU mode back
+			MOVEM.L	A0/D1,-(SP)								; save registers
+			JSR		([jSwapMMU])							;
+			MOVEM.L	(SP)+,A0/D1								; restore registers
+			Move.l	A0,D0									; D0 <- $Fs8000000
+			Bfextu	D0{4:4},D0								; D0 <- $00000000s
+	
+			MOVE.L	JVBLTask,A0								; call the VBL task manager
+			JSR		(A0)									; with slot # in D0
+			
+			MOVEQ	#1,D0									; signal that int was serviced				
+			RTS												; and return to caller
+			

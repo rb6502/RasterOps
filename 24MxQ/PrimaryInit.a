@@ -1,0 +1,794 @@
+;
+;	File:		PrimaryInit.a
+;
+;	Contains:	The PrimaryInit code for the DAFB ’040 PDS Display Card.
+;
+;	Written by: Mike Puckett, July 8, 1991.
+;
+;	Copyright:	© 1991 by Apple Computer, Inc., all rights reserved.
+;
+;	Change History (most recent first):
+;
+;		 <5>	11/11/91	jmp		Started defaulting to 8bpp where applicable.
+;		 <4>	11/06/91	jmp		Added support for 19” displays.
+;		 <3>	09/17/91	jmp		For mono-only devices, no longer drive the red & green channels
+;									when graying the screen.  Also, added “extended no-connect”
+;									support.
+;		 <2>	09/17/91	jmp		Added code to more intelligently handle PageMode.
+;		 <1>	09/17/91	jmp		first checked in
+;-------------------------------------------------------------
+;				Header Block
+;-------------------------------------------------------------
+;
+				Dc.b	sExec2							; Code type.
+				Dc.b	sCPU68020						; CPU type.
+				Dc.b	0								; Reserved.
+				Dc.l	DAFBInit-*						; Offset to code.
+				
+;-------------------------------------------------------------
+;				Useful Info
+;-------------------------------------------------------------
+;
+LocalFrame		Record	{A6Link},Decrement
+Return			Ds.l	1								; Return address.
+A6Link			Ds.l	1								; Saved A6.
+spBlk			Ds.b	SpBlock							; SpBlock.
+sPRAMBlk		Ds.b	SizesPRAMRec					; SpRAMRec.
+saveMMUMode		Ds.b	1								; Save entering MMU mode.
+monID			Ds.b	1								; ID of sensed display.
+spFlags			Ds.b	1								; Copy of Slot pRam flags.
+isSlowClock		Ds.b	1								; Always set to false here, for compatibility.
+vidParamsPtr	Ds.l	1								; Pointer to vidParams.
+LocalSize		Equ		*
+				Endr
+				
+MiniGamma		Record	0								; Entries for mini gamma table used in DAFBInit.
+blackRed		Ds.b	1								; Red
+whiteRed		Ds.b	1								;
+blackGreen		Ds.b	1								; Green
+whiteGreen		Ds.b	1								;
+blackBlue		Ds.b	1								; Blue
+whiteBlue		Ds.b	1								;
+				Ds.b	2								; <pad>
+GT_Size			Equ		*
+				Endr
+DT_Size			Equ		$08								; Size (in bytes) of entries in DAFB table.
+MT_Size			Equ		$02								; Size (in bytes) of entries in Mode table.
+		
+;-------------------------------------------------------------
+;				Code Block
+;-------------------------------------------------------------
+;
+				With	seBlock,spBlock,LocalFrame
+DAFBInit
+				Link	A6,#LocalSize								; Allocate some space for locals.
+												
+;
+; Set initial vendor status to good, otherwise SecondaryInit will not run.
+;
+				
+				Move.w	#seSuccess,seStatus(A0)						; VendorStatus <- good.
+				
+;
+; Get DAFBBase into A3.
+;
+				Move.l		#$F0000000,D1							; D1 <- $F0000000.
+				Move.b		seSlot(A0),D0							; D0 <- Slot number, s.
+				Bfins		D0,D1{4:4}								; D1 <- $Fs000000.
+				Move.l		D1,A3									; A3 <- $Fs000000.
+				
+				Adda.l		#DAFBBase,A3							; A3 <- $Fs800000.
+				
+;
+; Perform some generic initializations.
+;
+				Sf			isSlowClock(A6)							; Pretend we’re at 33Mhz.
+				
+				Move.b		D0,spBlk.spSlot(A6)						; Save our slot number.
+				Clr.b		spBlk.spExtDev(A6)						; No external devices.
+				
+;
+; DAFB’s registers and frame buffer are 32-bit addressed, so let’s just go there
+;	now…
+;
+				Moveq		#true32b,D0								; Set up to switch into 32-bit mode.
+				_SwapMMUMode										; Do switch.
+				Move.b		D0,saveMMUMode(A6)						; Save previous mode.
+;
+; Do a preliminary DAFB setup so that we can test vRAM and read the sense lines.
+;
+				Lea			PrelimInit,A1							; Point to minimal vidParams.
+				
+; Do the hardware setup…
+;
+				
+				Moveq		#0,D0									; Clear upper part of D0.
+				Move.l		A3,A2									; Copy DAFB base address.
+				
+; Setup Clock chip…
+;
+	
+				DAFBSpeedPI	A3										; Configure DAFB for right CPU speed.
+				
+				ADDA		#Clk_BaseOffset,A2						; Advance to Clock chip base.
+				MOVE.W		#Clk_ParmSize-1,D1						; Get the counter for clock registers.
+@ClockLoop		MOVE.B		(A1)+,D0								; Get the parameter.
+				MOVE.L		D0,(A2)									; Write it.
+				ADDA		#$10,A2									; Increment to next register,
+				DBRA		D1,@ClockLoop							; 	for each register.
+				Adda.l		#Misc_ParmSize,A1						; Skip past misc params.
+; DAFB setup				
+;•••
+				MOVE.L		A3,A2									; Copy the DAFB base again.
+;•••
+				MOVE.W		#DAFB_ParmSize-1,D1						; Get the counter for the DAFB parameters.
+@DAFBLoop		MOVE.W		(A1)+,D0								; Get the parameter.
+				MOVE.L		D0,(A2)+								; Write the parameter and increment.
+				DBRA		D1,@DAFBLoop
+				
+				DAFBSpeedPI	A3										; Configure DAFB for right CPU speed.
+; Swatch setup
+;•••
+				MOVE.L		A3,A2									; Copy the DAFB base again.
+;•••
+				ADDA		#Swatch_BaseOffset,A2					; Advance to Swatch first register.
+				MOVE.W		(A1)+,D0								; Get the first register.
+				MOVE.L		D0,(A2)									; Write first register.
+				ADDA		#Swatch_BaseOffset1-Swatch_BaseOffset,A2 ; Advance to register set.
+				MOVE.W		#Swatch_ParmSize1-1,D1					; Get the counter for Swatch setup.
+@SwatchLoop		MOVE.W		(A1)+,D0								; Get the Swatch parameter.
+				MOVE.L		D0,(A2)+								; Set up Swatch.
+				DBRA		D1,@SwatchLoop							; Do them all.
+				
+; ACDC configuration setup
+;•••
+				MOVE.L		A3,A2									; Copy the DAFB base again.
+;•••
+				Clr.l		ACDC_AddrReg(A3)						; Tell ACDC to use PCBR0.
+				Adda		#ACDC_ConfigReg,A2						; Advance to ACDC config register.
+				Move.w		(A1)+,D0								; Get the parameter.
+				Move.l		D0,(A2)									; Write it.
+				Tst.l		ACDC_AddrReg(A3)						; Read the addr reg to make it stick (AC842A).
+								
+; Everything's configured, so do the DAFB reset sequence			;	
+			
+				DAFBReset	A3										; Reset and
+				DAFBIdle	A3										;	idle DAFB.
+				
+; Kill slot interrupts on DAFB.
+				
+				CLR.L		Swatch_IntMsk(A3)						; Turn off all interrupts.
+; Determine the frame buffer size.  For the DAFB ’040 PDS Display Card, we support
+;	two configurations:  1 & 2 Megs of vRam.  Prototype versions of the card
+;	always have 2 Megs of vRam on them, though.
+;
+				Move.l		A3,A0									; Get DAFBBase into A0.
+				Adda.l		#FrameBase,A0							; Get the framebuffer base.
+				
+				MOVE.L		#'2MEG',(k2MvRAM-DAFBStdOffset-4,A0)	; Write a test value into alleged RAM.
+				MOVE.L		#'1meg',(k1MvRAM-DAFBStdOffset-4,A0)	; Write a different value at this point.
+				Moveq		#1,D2									; Assume there is only 1Meg of vRam.
+				Cmp.l		#'2MEG',(k2MvRAM-DAFBStdOffset-4,A0)	; If the 2 MB flag didn’t stick,
+				Bne.s		@EndSize								;	then only 1 MB is possible.
+				Subq		#1,D2									; Otherwise, 2 MBs exist.
+@EndSize		Move.l		DAFBFlags(A3),D0						; Get the DAFBFlags.
+				Bfins		D2,D0{vRamBits,numVRamBits}				; Set the amount of vRam.
+				Move.l		D0,DAFBFlags(A3)						; Write it back out.
+; Read the monitor type into D4.
+				Clr.w		D4										; Clear senseline register (.w for table below).
+				DAFBReadSenseLines A3,D4							; Read ’em!
+				CMP.B		#doExtendedSense,D4						; If we already recognize the display,
+				BNE			@EndSense								;	then continue.
+				
+;  Do Extended Sense since “no connect” was detected.
+;
+; 		(The idea behind the extended-sense-line algorithm is as follows:  First, drive sense line “a” and
+;		 read the values of “b” and “c.”  Next, drive sense line “b” and read the values of “a” and “c.”
+;		 Finally, drive sense line “c” and read the values of “a” and “b.”  In this way, a six-bit 
+;		 number of the form bc/ac/ab is generated.)
+				Clr.b		D4										; Clear “no connect” signal from D4.
+				Clr.b		D0										; Use D0 as temp from reads.
+; Drive a, Read bc
+;
+				Move.l		#dafbAMask,DAFB_Sense(A3)				; abc <- 011
+				DAFBReadSenseLines A3,D0							; abc -> ABC
+				Andi.b		#dafbAMask,D0							; 0BC
+				
+				Move.b		D0,D4									; 00 00 BC
+				Lsl.b		#2,D4									; 00 BC 00
+				
+; Drive b, Read ac
+;
+				Move.l		#dafbBMask,DAFB_Sense(A3)				; abc <- 101
+				DAFBReadSenseLines A3,D0							; abc -> ABC
+				Andi.b		#dafbBMask,D0							; A0C
+				
+				Bclr		#dafbSenseLineA,D0						; A0C becomes
+				Beq.s		@OrIn									;  A0C or
+				Bset		#dafbSenseLineB,D0						;  A1C
+				
+@OrIn			Or.b		D0,D4									; 00 BC AC
+				Lsl.b		#2,D4									; BC AC 00
+				
+; Drive c, Read ab
+;
+				Move.l		#dafbCMask,DAFB_Sense(A3)				; abc -> 110
+				DAFBReadSenseLines A3,D0							; abc <- ABC
+				Andi.b		#dafbCMask,D0							; AB0
+				Lsr.b		#1,D0									; 0AB
+				
+				Or.b		D0,D4									; BC AC AB
+; Now, see if what we got back anything we recognize…
+;
+				Cmp.b		#extendedNoConnect,D4					; If there really is nothing connected,
+				Beq.s		@NoConnect								;	then say so.
+				Cmp.b		#extendedSenseVGA,D4					; Otherwise, is it a VGA display?
+				Bne.s		@TryPal									; Nope, try PAL.
+				Move.b		#indexedSenseVGA,D4
+				Bra.s		@EndSense
+@TryPal			Cmp.b		#extendedSensePAL,D4					; Is it a PAL display?
+				Bne.s		@TryPALBox								; Nope, try PAL encoder box.
+				Move.b		#indexedSensePAL,D4
+				Bra.s		@EndSense
+				
+@TryPALBox		Cmp.b		#extendedSensePALBox,D4					; Is it a PAL encoder box?
+				Bne.s		@TryNTSC								; Nope, try NTSC encoder box.
+				Move.b		#indexedSensePAL,D4	
+				Bra.s		@EndSense
+				
+@TryNTSC		Cmp.b		#extendedSenseNTSC,D4					; Is it an NTSC encoder box?
+				Bne.s		@TryGF									; Nope, try GoldFish.
+				Move.b		#indexedSenseNTSC,D4
+				Bra.s		@EndSense
+				
+@TryGF			Cmp.b		#extendedSenseGF,D4						; Is it a GoldFish?
+				Bne.s		@Try19									; Nope, try 19.
+				Move.b		#indexedSenseGF,D4
+				Bra.s		@EndSense
+				
+@Try19			Cmp.b		#extendedSense19,D4						; Is it a 19”?
+				Bne.s		@NoConnect								; Nope, so we don’t recognize it.
+				Move.b		#indexedSense19,D4
+				Bra.s		@EndSense
+; If we don’t recognize the no-connect code, then we set up to delete all the video
+;	data structures and to turn DAFB off.
+				With		SP_Params
+@NoConnect
+				LEA			spBlk(A6),A0							; Point to spBlock.
+				LEA			sPRAMBlk(A6),A2							; Point to sPRAM block.
+				MOVE.L		A2,spResult(A0)							;
+				_sReadPRAMRec										; Read our slot’s pRAM (spSlot set up above).
+				
+				Move.b		SP_NoConnect(A2),D0						; Get the no-connect pRam byte.
+				Andi.b		#spNCValidMask,D0						; If it is valid,
+				Bne.s		@DoMonID								;	just pretend the monID monitor is attached.
+				Bra.s		@NoMon									; Otherwise, set up to shut things down.
+@DoMonID		Move.b		SP_NoConnect(A2),D4						; Get the no-connect pRam byte.
+				Andi.b		#spNoConnectMask,D4						; Strip the validation code.
+				Bra.s		@EndSense
+				
+@NoMon			Moveq		#0,D7									; No family modes.
+				Move.b		#sRsrc_NeverMatch,D5					; Set the magic number for no active video.
+				Move.b		#indexedNoConnect,D4					; Make the no-connect code indexed.
+				Move.b		#indexedNoConnect,monID(A6)				; Save it for pRAM.
+				Bra.s		@GetConfig								; And continue.
+				
+				EndWith
+@EndSense		Move.b		D4,monID(A6)							; Save the indexed monID so that we can put it
+																	;	into pRam later.
+;
+; Figure out what the favored configuration is.  After this routine, the favored spID is in D5;
+;	D7 contains the video mode family alternatives concatenated together (no configuration ever
+;	has more than four family members).  In a little while, we'll have the current selected mode into
+;	D5 from pRAM.  It would be nice to be able to use a RECORD structure here for the DAFBTable entries,
+;	but it wouldn't allow us to index into the two mode entries, so we just fake it.
+;
+;	D6 maintains the indexed sense id.
+;
+				LEA			DAFBTable,A0							; Point to DAFB configuration table.
+				LEA			(A0,D4*DT_Size),A0						; Point to the entry set for this display.
+				MOVE.L		DT_Family(A0),D7						; Get the family alternatives.
+				MOVE.B		DT_Mode(A0,D2),D5						; Get the default spID.
+				
+				Moveq		#0,D6									; Clear for safety.
+				Move.b		D4,D6									; Save indexed sense ID.
+;
+; Read the old configuration from slot pRAM to confirm that it's OK.  Here's how we format the spBlock
+;	for DAFB: 0:1=boardID (as usual), 2=spID of depth (as set up by Monitors), 3=spID of last used 
+;	configuration, 4=spID of default configuration for this mode
+;
+				With		SP_Params
+@GetConfig
+				LEA			spBlk(A6),A0							; Point to spBlock.
+				LEA			sPRAMBlk(A6),A2							; Point to sPRAM block.
+				MOVE.L		A2,spResult(A0)							;
+				_sReadPRAMRec										; Read slot zero's pRAM (spSlot set up above).
+				
+				Move.b		monID(A6),SP_MonID(A2)					; Set up to write out sensed monID.
+				Move.b		SP_Flags(A2),spFlags(A6)				; Make a local copy of the flags.
+; If the last configuration matches, then D5 will be OK.  The actual mode (depth) may be different, if
+;	(and only if) the last configuration matches.  Note:  We do this so that the “Welcome to Mac” screen
+;	looks right when switching from different configuration within the same family.
+;
+; Known problem:  If someone calls SetDefaultMode and writes junk to it, then SP_LastConfig
+;	probably won’t be correct for SP_DfltConfig.  As such, I should either cross-check the SP_LastConfig
+;	value here (which would be better since pRam can be written to in all sorts of ways), or be a little
+;	more rigid in the driver.
+;
+@CheckConfig
+				CMP.B		SP_DfltConfig(A2),D5					; Compare to the default configuration.
+				Beq.s		@WritePRam								; If same, just update monID.
+; Configuration has changed, so set up pRAM for next time.  Note:  We ALWAYS write out pRam because
+;	the monID might have changed even though spID might not have.  A good example of this
+;	is a NTSC or PAL encoder/decoder box vs. an NTSC or PAL display.
+;
+				MOVE.B		D5,SP_DfltConfig(A2)					; Set identification configuration.
+				MOVE.B		D5,SP_LastConfig(A2)					; Make this the current config as well.
+				Lea			ModeTable,A0							; Point to the table of modes.
+				Lea			(A0,D6*MT_Size),A0						; Get offset to right entry per display.
+				Move.b		(A0,D2),SP_Depth(A2)					; Write out the default mode per vRam.
+				
+				Cmp.b		#sRsrc_Vid_DAFB_GS,D5					; If we’re on a Rubik,
+				Beq.s		@DisableSyncOnGreen						;	then disable sync-on-green.
+				Bra.s		@EnableSyncOnGreen						; Otherwise, enable sync-on-green.
+				
+@DisableSyncOnGreen				
+				Bclr		#spSyncOnGreen,SP_Flags(A2)				; Clear the sync-on-green flag (to disable).
+				Bclr		#spSyncOnGreen,spFlags(A6)				; Local copy, too.
+				Bra.s		@WritePRam
+@EnableSyncOnGreen
+				Bset		#spSyncOnGreen,SP_Flags(A2)				; Set the sync-on-green flag (to enable).
+				Bset		#spSyncOnGreen,spFlags(A6)				; Local copy, too.
+				
+@WritePRam
+				LEA			spBlk(A6),A0							; Point back to spBlock.
+				MOVE.L		A2,spsPointer(A0)						; Set up parameter block.
+				_sPutPRAMRec										; Write the new record out
+;
+; Prune the video sResources.
+;
+DAFBPruneVidSRsrcs
+				MOVE.B		SP_LastConfig(A2),D5					; Get current mode in D5.
+				TST.L		D7										; Are there family modes?
+				BEQ.S		@NoFamilies								; If zero, then none.
+				
+				EndWith
+;
+; If there are family modes, adjust for memory size.  For interlaced displays, the family mode longword
+;	is constructed such that the high word holds the IDs for convolved modes.  Also, the low word contains
+;	the full-function spIDs (rather than the reduced vRam versions).  For VGA, we use the family
+;	mode mechanism to swap between VGA and SuperVGA.
+;
+				TST.B		D2										; If D2=0, then 2MB vRAM,
+				BEQ.S		@NoFamilies								; 	so no need to adjust.
+				And.l		#$FFFFFEFE,D7							; Otherwise, keep convolved and convert 'b' to 'a'.
+			
+@NoFamilies		LEA			ModeList,A1								; Point to all the video modes.
+				MOVE.W		(A1)+,D1								; Get count of modes.
+@BeginLoop		MOVE.B		(A1)+,spID(A0)							; Get a mode from the list and put in spBlock.
+				CMP.B		spID(A0),D5								; Is this the current one (the keeper)?
+				BEQ.S		@EndLoop								;
+				
+				TST.L		D7										; Test for family modes.
+				BEQ.S		@SkipFamilies							;
+		
+				MOVEQ		#4-1,D3									; Test for four family mode matches.
+@LoopFamilies				
+				CMP.B		spID(A0),D7								; Is this a match?
+				BEQ.S		@disableIt								; If it is, then disable rather than delete.
+				ROL.L		#8,D7									; Shift next value into low-byte.
+				DBRA		D3,@LoopFamilies						; If it exits from the bottom, then delete this mode.
+			
+@SkipFamilies
+ 				_sDeleteSRTRec										; Delete it.
+@EndLoop		DBRA		D1,@BeginLoop
+				BRA.S		ChkDAFBVidActive						; Continue		
+@DisableIt
+				MOVE.L		#1,spParamData(A0)						; Setup to disable this mode.
+				CLR.L		spsPointer(A0)							; Not a RAM sRsrc.
+				_SetsRsrcState										; Set it.
+				BRA.S		@EndLoop
+;
+; Now that everything is set up, we need to determine whether a known configuration is out there.
+;	If so, we continue with the normal PrimaryInit process.  Otherwise, we shut things down and
+;	leave.
+;
+ChkDAFBVidActive
+				CMP.B		#sRsrc_NeverMatch,D5					; If a known display is connected, then
+				BNE.S		DAFBSetup								;	start the ball rolling.
+				BRA			DAFBExit								; Otherwise, just leave as DAFB is already
+																	;	idle.
+;				
+; OK, we've done all the bookkeeping.  Now, load and set the DAFB parameters.
+;
+DAFBSetup
+				
+				LEA			spBlk(A6),A0							; Point back the spBlock on th stack.
+				MOVE.B		#sRsrcBoard,spID(A0)					; Find the board sRsrc.
+				_sRsrcInfo											; 
+				
+				MOVE.B		#sVidParmDir,spID(A0)					; Look for the video parameters dir.
+				_sFindStruct										; 
+				MOVE.B		D5,spID(A0)								; Look in the directory for this config's parameters.
+				_sGetBlock											; 
+				
+				MOVE.L		spResult(A0),A1							; Get pointer to it.  Use firstVidMode set of parameters.
+				Move.l		A1,vidParamsPtr(A6)						; Save for later disposal.
+				
+; Do the hardware setup.
+				MOVEQ		#0,D0									; Clear the upper part of D0.
+				MOVE.L		A3,A2									; Copy DAFB base address.
+; National Clock chip setup 
+				DAFBSpeedPI	A3										; Configure DAFB for right CPU speed.
+				ADDA		#Clk_BaseOffset,A2						; Advance to Clock chip base.
+				MOVE.W		#Clk_ParmSize-1,D1						; Get counter for Clock registers.
+@ClockLoop		MOVE.B		(A1)+,D0								; Get the parameter.
+				MOVE.L		D0,(A2)									; Write it.
+				ADDA		#$10,A2									; Increment to next register,
+				DBRA		D1,@ClockLoop							; 	for each register.
+				Adda.l		#Misc_ParmSize,A1						; Skip past misc params.
+; DAFB setup
+;•••
+				MOVE.L		A3,A2									; Copy the DAFB base again.
+;•••
+				MOVE.W		#DAFB_ParmSize-1,D1						; Get counter for the DAFB parameters.
+@DAFBLoop		MOVE.W		(A1)+,D0								; Get parameter.
+				MOVE.L		D0,(A2)+								; Write it, and increment.
+				DBRA		D1,@DAFBLoop
+				DAFBSpeedPI	A3										; Configure DAFB for right CPU speed.
+				
+; Swatch setup
+;•••
+				MOVE.L		A3,A2									; Copy the DAFB base again.
+;•••
+				ADDA		#Swatch_BaseOffset,A2					; Advance to Swatch first register.
+				MOVE.W		(A1)+,D0								; Get the first register.
+				MOVE.L		D0,(A2)									; Write first register.
+				ADDA		#Swatch_BaseOffset1-Swatch_BaseOffset,A2	; Advance to register set.
+				MOVE.W		#Swatch_ParmSize1-1,D1						; Get the counter for Swatch setup.
+@SwatchLoop		MOVE.W		(A1)+,D0									; Get the Swatch parameter.
+				MOVE.L		D0,(A2)+									; Set up Swatch.
+				DBRA		D1,@SwatchLoop								; All of them.
+				
+; ACDC configuration setup
+;•••
+				MOVE.L		A3,A2									; Copy the DAFB base again.
+;•••
+				Clr.l		ACDC_AddrReg(A3)						; Tell ACDC to use PCBR0.
+				Adda		#ACDC_ConfigReg,A2						; Advance to ACDC config register.
+				Move.w		(A1)+,D0								; Get the parameter.
+				Move.l		D0,(A2)									; Write it.
+				Nop													; (DAFB’s address space is non-serial.)
+				Tst.l		ACDC_AddrReg(A3)						; Read the addr reg to make it stick (AC842A).
+			
+; Sync On Green…
+;
+				
+				Move.l		DAFB_ClkCfg(A3),D0						; Get the current Clock config value.
+				Btst		#spSyncOnGreen,spFlags(A6)				; If we’re supposed to put sync on green,
+				Bne.s		@EnableSyncOnGreen						;	then hop to it.
+				Moveq		#0,D1									; Otherwise, set up for disabling.
+				Bra.s		@SyncOnGreenCommon
+	
+@EnableSyncOnGreen
+				Moveq		#1,D1									; Set up for enabling.
+@SyncOnGreenCommon				
+				Bfins		D1,D0{dafbSyncOnGreen:1}				; Toggle the sync-on-green bit appropriately,
+				Move.l		D0,DAFB_ClkCfg(A3)						;	apply it.
+; Page Mode…
+;
+@DoPageMode	
+				Move.l		DAFB_Config(A3),D0						; Read the DAFBConfig register.
+				Bfextu		D0{dafbWrdIntBit:1},D0					; If word-interleave is on,
+				Bne.s		@DisableIt								;	then ALWAYS disable page mode.
+				Btst		#spPageMode,spFlags(A6)					; If we’re not supposed to enable page mode,
+				Beq.s		@DoReset								;	then just go on since the hardware comes that way.
+				Moveq		#1,D0									; Otherwise, set up to enable page mode,
+				Bra.s		@HitPageMode							;	and do it.
+@DisableIt		Moveq		#0,D0									; Set up to disable page mode,
+@HitPageMode	Move.l		D0,DAFB_PgMdEn(A3)						; 	and do it.	
+				
+; Everything's configured, so now reset DAFB
+;
+@DoReset		
+				DAFBReset	A3
+; Do screen and CLUT setup…
+;
+				Move.l		A3,A2									; Get DAFBBase into A2.
+				Adda.l		#FrameBase,A2							; Offset to start of the framebuffer.
+				
+				Move.l		vidParamsPtr(A6),A0						; Get start of vidParams.
+				Adda.l		#MiscBaseAddr,A0						; Skip over  MaxMode(a,b) params.
+				Adda.l		(A0),A2									; Get video base of framebuffer.
+; Do top of screen…
+;
+;	Note that SC_BorderHeight is adjusted to work correctly for both bordered and non-bordered screens.
+;	Specifically, this constant is not “-1”-adjusted for Dbra, so we jump into the tail end of the Dbra
+;	loop and therefore have the “right” thing happen.  My head hurts now, and yours should, too!
+;
+;	Note:  This routine only works for screens whose boundaries are even multiples of 64 (due to our
+;		   use of “doublelongs).  Real PALST mode is 614x460, but we use 640x480 for for now.  This
+;		   keeps things fast.  If we have to add “runs” to fix this problem, we will.
+;
+;	This code is used in the driver’s GrayScreen (DAFBGrayScreen), as well.  Fixes should be applied
+;	to both places.  Wouldn’t it be neat if there was some sort of video “toolbox” for code that
+;	is shared among the drivers and primary inits?  Sure is easy to miss things when the
+;	same code is spread across multiple files.
+;
+	
+				With		SC_Params
+				
+				Moveq		#IndexedBlack,D3						; Get black into a convenient register.
+								
+				Cmp.b		#sRsrc_Vid_DAFB_GS,D5					; If we’re on a Rubik display, then
+				Beq.s		@FixRubik1bpp							;	apply fix.
+				
+				Cmp.b		#sRsrc_Vid_DAFB_NTSCconvST,D5			; If we’re on an NTSC convolved display,
+				Beq.s		@FixNTSCPALTop							;	then apply fix.
+				Cmp.b		#sRsrc_Vid_DAFB_NTSCconvFF,D5
+				Beq.s		@FixNTSCPALTop
+				
+				Cmp.b		#sRsrc_Vid_DAFB_PALconvST,D5			; If we’re on a PAL convolved display,
+				Beq.s		@FixNTSCPALTop							;	then apply fix.
+				Cmp.b		#sRsrc_Vid_DAFB_PALconvFF,D5
+				Bra.s		@ScreenStart
+				
+@FixRubik1bpp	Move.w		#DAFB_512_RB,D0							; Fix first-line problem on Rubik displays.
+				Bra.s		@FixRow
+	
+@FixNTSCPALTop	Move.w		#DAFB_1024_RB,D0						; Create “false” first line on NTSC/PAL convolved
+																	;	displays.			
+@FixRow			Suba		D0,A2									; Point back one full line.								
+				Lsr.w		#2,D0									; Make loop counter long-word based.
+				Subq		#1,D0									; Subtract 1 for Dbra.
+@BlastRow		Move.l		D3,(A2)+								; Blast black to screen.
+				Dbra		D0,@BlastRow
+@ScreenStart	Move.w		SC_BorderHeight(A1),D1					; Get number of rows (not -1) to blast back on top.
+				Bra.s		@TopSecPrime							; 
+@TopSecFill_V	Move.w		SC_BorderWidth(A1),D0					; Get number of longs (-1) to blast black in row.
+@TopSecFill_H	Move.l		D3,(A2)+								; Blast black to screen.
+				Dbra		D0,@TopSecFill_H
+				
+				Adda.w		SC_SkipFactor(A1),A2					; Skip to start of next row.
+@TopSecPrime	Dbra		D1,@TopSecFill_V
+; Do middle of screen…
+;
+;	Unlike the top part, there is always a “middle.”  However, there might be a left and right side (when the
+;	border is appropriate), so the not “-1”-adjusted for Dbra comments that are listed above apply horizontally
+;	here.
+;
+				Move.l		#OneBitGray,D4							; Get the gray pattern (for the active middle).
+				Move.w		SC_ActiveHeight(A1),D1					; Get number of rows (-1) in middle of screen.
+				
+@MidSecFill_V				
+				Move.w		SC_BorderSide(A1),D0					; Get number of longs (not -1) to blast black in row.
+				Bra.s		@MidSecPrime_L	
+@MidSecFill_L	Move.l		D3,(A2)+								; Blast black to screen.
+@MidSecPrime_L	Dbra		D0,@MidSecFill_L
+				
+				Move.w		SC_ActiveWidth(A1),D0					; Get the number of doublelongs (-1) for active middle
+@MidActFill_H	Move.l		D4,(A2)+								; Fill the active section with gray.
+				Cmp.b		#sRsrc_Vid_DAFB_SVGAa,D5				; Skip if SuperVGA (800x600 is not an
+				Beq.s		@SkipDouble								;	even multiple of 64, but it is an)
+				Cmp.b		#sRsrc_Vid_DAFB_SVGAb,D5				;	even multiple of 32).
+				Beq.s		@SkipDouble
+				Move.l		D4,(A2)+								; Do second half where applicable.
+@SkipDouble		Dbra		D0,@MidActFill_H		
+				Not.l		D4										; Invert for NEXT line.
+				
+				Move.w		SC_BorderSide(A1),D0					; Get number of longs (not -1) to blast black in row.
+				Bra.s		@MidSecPrime_R
+@MidSecFill_R	Move.l		D3,(A2)+								; Blast black to screen
+@MidSecPrime_R	Dbra		D0,@MidSecFill_R
+				
+				Adda.w		SC_SkipFactor(A1),A2					; Move to NEXT line.
+				Dbra		D1,@MidSecFill_V
+; Do bottom of screen…
+;
+				Move.w		SC_BorderHeight(A1),D1					; Get number of rows (not -1) to blast back on bottom.
+				
+				Cmp.b		#sRsrc_Vid_DAFB_NTSCconvST,D5			; If we’re on an NTSC convolved display,
+				Beq.s		@FixNTSCPALBot							;	then apply fix.
+				Cmp.b		#sRsrc_Vid_DAFB_NTSCconvFF,D5
+				Beq.s		@FixNTSCPALBot
+				
+				Cmp.b		#sRsrc_Vid_DAFB_PALconvST,D5			; If we’re on a PAL convolved display,
+				Beq.s		@FixNTSCPALBot							;	then apply fix.
+				Cmp.b		#sRsrc_Vid_DAFB_PALconvFF,D5
+				Bra.s		@BotStart
+				
+@FixNTSCPALBot	Addq		#1,D1									; For convolved interlace displays, we need to
+																	;	blacken the “false” bottom.
+@BotStart		Bra.s		@BotSecPrime							; 
+@BotSecFill_V	Move.w		SC_BorderWidth(A1),D0					; Get number of longs (-1) to blast black in row.
+@BotSecFill_H	Move.l		D3,(A2)+								; Blast black to screen.
+				Dbra		D0,@BotSecFill_H
+				
+				Adda.w		SC_SkipFactor(A1),A2					; Skip to start of next row.
+@BotSecPrime	Dbra		D1,@BotSecFill_V
+				EndWith												; SC_Parms
+; Set up a [white, black] gamma-corrected color table.
+;
+				With		MiniGamma
+				
+				Clr.l		ACDC_AddrReg(A3)						; Start at position zero in the CLUT.
+				Adda		#ACDC_DataReg,A3						; Point to CLUT data register directly.
+				Moveq		#0,D0									; Clear write value.
+				
+				Lea			MiniGammaTable,A0						; Point to start of the mini gamma table.
+				Lea			(A0,D6*GT_Size),A0						; Get offset to right entry.
+			
+; Write gamma-correct white entry to CLUT…
+;
+				Cmp.b		#sRsrc_Vid_DAFB_FP,D5					; If this is a Portrait,
+				Beq.s		@DoMonoWhite							;	then set up for a mono-only display.
+				Cmp.b		#sRsrc_Vid_DAFB_2P,D5					; If this is a Kong,
+				Beq.s		@DoMonoWhite							;	then set up for a mono-only display.
+				Bra.s		@DoWhiteRGB								; Otherwise, do RGB setup.
+@DoMonoWhite	Clr.l		(A3)
+				Clr.l		(A3)
+				Bra.s		@WriteBlueWhite
+@DoWhiteRGB		Move.b		whiteRed(A0),D0
+				Move.l		D0,(A3)
+				Move.b		whiteGreen(A0),D0
+				Move.l		D0,(A3)
+				
+@WriteBlueWhite	Move.b		whiteBlue(A0),D0
+				Move.l		D0,(A3)
+; Write gamma-correct black entry to CLUT…
+;
+				Cmp.b		#sRsrc_Vid_DAFB_FP,D5					; If this is a Portrait,
+				Beq.s		@DoMonoBlack							;	then set up for a mono-only display.
+				Cmp.b		#sRsrc_Vid_DAFB_2P,D5					; If this is a Kong,
+				Beq.s		@DoMonoBlack							;	then set up for a mono-only display.
+				Bra.s		@DoBlackRGB								; Otherwise, do RGB setup.
+@DoMonoBlack	Clr.l		(A3)
+				Clr.l		(A3)
+				Bra.s		@WriteBlueBlack
+@DoBlackRGB		Move.b		blackRed(A0),D0
+				Move.l		D0,(A3)
+				Move.b		blackGreen(A0),D0
+				Move.l		D0,(A3)
+				
+@WriteBlueBlack	Move.b		blackBlue(A0),D0
+				Move.l		D0,(A3)
+				
+				EndWith
+				
+; Dispose of vidParams and restore addressing mode…
+;
+				Move.l		vidParamsPtr(A6),A0						; Dispose of video parameter block.
+				_DisposPtr
+;
+; Restore the previous addressing mode and leave.
+;
+DAFBExit
+				Move.b		saveMMUmode(A6),D0						; Get the previous mode into D0.
+				_SwapMMUMode										; Swap back.
+				
+				Unlk		A6										; Restore the stack, and
+				Rts													; 	leave.
+				
+;-------------------------------------------------------------
+;				Data
+;-------------------------------------------------------------
+;
+				Align		4
+;
+; Video spID mode list.  Here they all are in byte size.  The first word of the table is the count
+;	of legal modes on all machines, followed by a list of all functional spIDs.  
+;
+ModeList		Dc.w		MLEnd-MLStart-1																	; Block size.
+MLStart			
+				Dc.b		sRsrc_Vid_DAFB_RGB2Pa,sRsrc_Vid_DAFB_RGB2Pb
+				Dc.b		sRsrc_Vid_DAFB_FP
+				Dc.b		sRsrc_Vid_DAFB_GS
+				Dc.b		sRsrc_Vid_DAFB_2P
+				Dc.b		sRsrc_Vid_DAFB_NTSCSTa,sRsrc_Vid_DAFB_NTSCSTb
+				Dc.b		sRsrc_Vid_DAFB_NTSCFFa,sRsrc_Vid_DAFB_NTSCFFb
+				Dc.b		sRsrc_Vid_DAFB_NTSCconvST,sRsrc_Vid_DAFB_NTSCconvFF
+				Dc.b		sRsrc_Vid_DAFB_RGBFPa,sRsrc_Vid_DAFB_RGBFPb
+				Dc.b		sRsrc_Vid_DAFB_HRa,sRsrc_Vid_DAFB_HRb
+				Dc.b		sRsrc_Vid_DAFB_VGAa,sRsrc_Vid_DAFB_VGAb
+				Dc.b		sRsrc_Vid_DAFB_SVGAa,sRsrc_Vid_DAFB_SVGAb
+				Dc.b		sRsrc_Vid_DAFB_GFa,sRsrc_Vid_DAFB_GFb
+				Dc.b		sRsrc_Vid_DAFB_PALSTa,sRsrc_Vid_DAFB_PALSTb
+				Dc.b		sRsrc_Vid_DAFB_PALFFa,sRsrc_Vid_DAFB_PALFFb
+				Dc.b		sRsrc_Vid_DAFB_PALconvST,sRsrc_Vid_DAFB_PALconvFF
+				Dc.b		sRsrc_Vid_DAFB_19a,sRsrc_Vid_DAFB_19b
+				
+				Dc.b		sRsrc_NeverMatch
+MLEnd
+				Align		4
+;
+; This is the table that translates monitor and memory configuration information to the appropriate	
+;	DAFB spID.  Here's the format - the table is grouped by monitor type.  For each monitor type,
+;	there's a longword which calls out the video mode family members of this mode.  If there aren't	
+;	any alternate modes, then this value is zero.  The next byte is a set of flags for properties of
+;	this display.  No flags are defined at this time. The next two bytes are the 2MB & 1MB default
+;	spIDs, respectively.
+;
+DT_Family		EQU			0					; [4 bytes] concatenated spIDs of alternate video mode family members.
+DT_Misc			EQU			4					; [1 byte] miscellaneous modal flag word.
+DT_Mode			EQU			5					; [2 bytes] spID of the preferred mode, one for each memory configuration.
+DAFBTable
+;							Family 	 		 Misc  	Modes: 2MB, 1MB
+;----------------------------------------------------------------------------------------------------
+				DC.B		0,0,0,0,			0,	sRsrc_Vid_DAFB_RGB2Pb,sRsrc_Vid_DAFB_RGB2Pa,0				; Vesuvio
+				DC.B		0,0,0,0, 			0,	sRsrc_Vid_DAFB_FP,sRsrc_Vid_DAFB_FP,0						; Mono Full-Page
+				DC.B		0,0,0,0,			0,	sRsrc_Vid_DAFB_GS,sRsrc_Vid_DAFB_GS,0						; Rubik
+				DC.B		0,0,0,0,			0,	sRsrc_Vid_DAFB_2P,sRsrc_Vid_DAFB_2P,0						; Two-Page
+				DC.B		sRsrc_Vid_DAFB_NTSCconvST,	\														;
+							sRsrc_Vid_DAFB_NTSCconvFF,	\														;
+							sRsrc_Vid_DAFB_NTSCSTb,		\														;
+							sRsrc_Vid_DAFB_NTSCFFb,		\														;
+												0,	sRsrc_Vid_DAFB_NTSCSTb,sRsrc_Vid_DAFB_NTSCSTa,0				; NTSC
+				
+				DC.B		0,0,0,0,			0,	sRsrc_Vid_DAFB_RGBFPb,sRsrc_Vid_DAFB_RGBFPa,0				; RGB Full-Page
+				DC.B		0,0,0,0,			0,	sRsrc_Vid_DAFB_HRb,sRsrc_Vid_DAFB_HRa,0						; High-Res RGB/Mono
+				
+				DC.B		0,0,0,0,			0,	0,0,0														; <skip for no connect> 
+				
+				DC.B		0,0,						\
+							sRsrc_Vid_DAFB_VGAb,		\
+							sRsrc_Vid_DAFB_SVGAb,		\
+												0,	sRsrc_Vid_DAFB_VGAb,sRsrc_Vid_DAFB_VGAa,0					; VGA
+				DC.B		sRsrc_Vid_DAFB_PALconvST,	\														;
+							sRsrc_Vid_DAFB_PALconvFF,	\														;
+							sRsrc_Vid_DAFB_PALSTb,		\														;
+ 							sRsrc_Vid_DAFB_PALFFb,		\														;
+												0,	sRsrc_Vid_DAFB_PALSTb,sRsrc_Vid_DAFB_PALSTa,0				; PAL
+				DC.B		0,0,0,0,			0,	sRsrc_Vid_DAFB_GFb,sRsrc_Vid_DAFB_GFa,0						; Goldfish
+				Dc.b		0,0,0,0,			0,	sRsrc_Vid_DAFB_19b,sRsrc_Vid_DAFB_19a,0						; 19”
+				
+				Align		4
+MiniGammaTable
+;							 bR  wR  bG  wG  bB  wB
+;----------------------------------------------------------------------------------------------------											<4>
+				Dc.b		$00,$FF,$00,$FF,$00,$FF,0,0								; Vesuvio
+				Dc.b		$00,$FF,$00,$FF,$00,$FF,0,0								; Mono Full-Page
+				Dc.b		$05,$FF,$05,$FF,$05,$FF,0,0								; Rubik
+				Dc.b		$00,$FF,$00,$FF,$00,$FF,0,0								; Two-Page
+				Dc.b		$00,$FF,$00,$FF,$00,$FF,0,0								; NTSC
+				Dc.b		$00,$FF,$00,$FF,$00,$FF,0,0								; RGB Full-Page
+				Dc.b		$00,$FF,$00,$FF,$00,$FF,0,0								; High-Res RGB/Mono
+				Dc.b		$00,$00,$00,$00,$00,$00,0,0								; 
+				Dc.b		$00,$FF,$00,$FF,$00,$FF,0,0								; VGA
+				Dc.b		$00,$FF,$00,$FF,$00,$FF,0,0								; PAL
+				Dc.b		$00,$FF,$00,$FF,$00,$FF,0,0								; GoldFish
+				Dc.b		$00,$FF,$00,$FF,$00,$FF,0,0								; 19”	
+				
+				Align		4
+ModeTable
+;							2Meg,1Meg
+;----------------------------------------------------------------------------------------------------
+				Dc.b		FourthVidMode,FourthVidMode								; Vesuvio
+				Dc.b		FirstVidMode,FirstVidMode								; Mono Full-Page
+				Dc.b		FourthVidMode,FourthVidMode								; Rubik
+				Dc.b		FirstVidMode,FirstVidMode								; Two-Page
+				Dc.b		FourthVidMode,FourthVidMode								; NTSC
+				Dc.b		FourthVidMode,FourthVidMode								; RGB Full-Page
+				Dc.b		FourthVidMode,FourthVidMode								; High-Res RGB/Mono
+				Dc.b		0,0														;
+				Dc.b		FourthVidMode,FourthVidMode								; VGA
+				Dc.b		FourthVidMode,FourthVidMode								; PAL
+				Dc.b		FourthVidMode,FourthVidMode								; GoldFish
+				Dc.b		FourthVidMode,FourthVidMode								; 19”
+				
+				Align		4
+PrelimInit
+; Clock chip parms
+;
+				DC.B		$0F,$01,$01,$00,$09,$03,$00,$00							; Clock chip parms
+				DC.B		$00,$02,$05,$06,$04,$01,$00,$00							;
+; Misc params
+;
+				Dc.b		$00,$00													; (Just filler here)
+				Dc.l		$0														; 
+; One bit mode parameters
+;
+				DC.W		$0008,$0000,$0100,$061E,$0030							; DAFB parms
+				DC.W		$0FF2,$026E,$0190,$0030,$031F,$005F,$006B				; Swatch parms
+				DC.W		$007E,$0083,$0303,$031E,$041A,$0418,$0002,$0007			;
+				DC.W		$0044,$0404,$0408,$0025									;
+				DC.W		$0080													; ACDC parms
