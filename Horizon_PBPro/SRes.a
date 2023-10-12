@@ -1,0 +1,1885 @@
+;
+;	File:		SRes.a
+;
+;	Contains:	slot resource file
+;
+;	Written by:	Eric Kuo
+;
+;	Copyright:	й 1994 by RasterOps, Inc., all rights reserved.
+;
+;	Change History (most recent first):
+;
+;		 <3>	 4/08/94	ek		use only 8x now
+;		 <2>	 3/29/94	ek		added Display Manager support
+;		 <1>	 3/21/94	ek		first checked in
+;
+		INCLUDE		'Rom.a'
+;===============================================================================
+;	Begin Declaration ROM
+;===============================================================================
+VideoDeclROM	MAIN
+		ORG		0	
+	OSLstEntry		1,BoardsResList			; Board sResource List Offset
+  IF	DO_12X10	THEN
+    OSLstEntry		$80,sResList80			; My sResource List Offset - 1280 X 1024
+  ENDIF
+    OSLstEntry		$81,sResList81			; My sResource List Offset - 1152 X 870
+    OSLstEntry		$82,sResList82			; My sResource List Offset - 1024 X 768 75Hz
+    OSLstEntry		$83,sResList83			; My sResource List Offset - 1024 X 768 60Hz
+    OSLstEntry		$84,sResList84			; My sResource List Offset -  832 X 624
+    OSLstEntry		$85,sResList85			; My sResource List Offset -  640 X 480 non-interlaced
+    OSLstEntry		$86,sResList86			; My sResource List Offset -  640 X 870
+    OSLstEntry		$8a,sResList8a			; My sResource List Offset -  1600 X 1200 ext
+    OSLstEntry		$8b,sResList8b			; My sResource List Offset -  2400 x 1800 ext
+    OSLstEntry		$8c,sResList8c			; My sResource List Offset -  3200 x 2400 ext
+    OSLstEntry		$8d,sResList8d			; My sResource List Offset -  4000 x 3000 ext
+    DatLstEntry     endOfList,0				; End
+;======================================================================================
+;					Board sResource List
+;======================================================================================
+BoardsResList
+	OSLstEntry		sRsrcType,BoardType			; Board sResource Type Format Offset
+	OSLstEntry		sRsrcName,BoardName			; Board sResource Name Offset
+	;;;;OSLstEntry		sRsrcIcl8,BoardIcon			; Board sResource Icon Offset
+	OSLstEntry		20,BoardBTInfo				; Board sResource block transfer info Offset
+	DatLstEntry		boardId,BoardId				; Board ID assigned by Apple
+;	OSLstEntry		primaryInit,PInit			; Primary Initialization Code seBlock Offset
+	DC.B			'Pxxx'						; Primary Initialization Code seBlock Offset
+	OSLstEntry		vendorInfo,VendorInfo		; Vendor Info List Offset
+;	OSLstEntry		secondaryInit,SInit			; Secondary Initialization Code seBlock Offset
+	DC.B			'Sxxx'						; Secondary Initialization Code seBlock Offset
+	OSLstEntry		sRsrcVidNames,ModeNames		; Video family mode names
+;//еееее Display Manager (((((
+	OSLstEntry		123,svidparmdir				; sVidParmDir
+	;;;;OSLstEntry		$9e,svidparmdir				; sVidParmDir
+;//еееее Display Manager )))))
+	DatLstEntry     endOfList,0					; End
+;======================================================================================
+;					Block Transfer Info
+;======================================================================================
+BoardBTInfo
+;;	DC.L	allSlaveBlockSizes
+	DC.L	0
+	DC.L	0
+;======================================================================================
+;					Video family mode names directory
+;======================================================================================
+ModeNames
+  IF	DO_12X10	THEN
+	OSLstEntry		$80,s1280x1024
+  ENDIF
+	OSLstEntry		$81,s1152x870
+	OSLstEntry		$82,s1024x768_75
+	OSLstEntry		$83,s1024x768_60
+    OSLstEntry		$84,s832x624
+	OSLstEntry		$85,s640x480
+	OSLstEntry		$86,s640x870
+	OSLstEntry		$8a,s1600x1200ext
+	OSLstEntry		$8b,s2400x1800ext
+	OSLstEntry		$8c,s3200x2400ext
+	OSLstEntry		$8d,s4000x3000ext
+	DatLstEntry		$FF,0
+s1280x1024
+f1280x1024
+	DC.L ends1280x1024-s1280x1024
+	DC.W 20
+	DC.B '1280 X 1024'
+	DC.W 0
+ends1280x1024
+s1152x870
+f1152x870
+	DC.L ends1152x870-s1152x870
+	DC.W 21
+	DC.B '1152 X 870'
+	DC.W 0
+ends1152x870
+s1024x768_75
+f1024x768_75
+	DC.L ends1024x768_75-s1024x768_75
+	DC.W 22
+	DC.B '1024 X 768 (75Hz)'
+	DC.W 0
+ends1024x768_75
+s1024x768_60
+f1024x768_60
+	DC.L ends1024x768_60-s1024x768_60
+	DC.W 24
+	DC.B '1024 X 768 (60Hz)'
+	DC.W 0
+ends1024x768_60
+s832x624
+f832x624
+	DC.L ends832x624-s832x624
+	DC.W 26
+	DC.B '832 X 624'
+	DC.W 0
+ends832x624
+s640x480
+f640x480
+	DC.L ends640x480-s640x480
+	DC.W 28
+	DC.B '640 X 480 (67Hz)'
+	DC.W 0
+ends640x480
+s640x870
+f640x870
+	DC.L ends640x870-s640x870
+	DC.W 30
+	DC.B '640 X 870'
+	DC.W 0
+ends640x870
+s1600x1200ext
+f1600x1200ext
+	DC.L ends1600x1200ext-s1600x1200ext
+	DC.W 40
+	DC.B '1600 X 1200 (Extended)'
+	DC.W 0
+ends1600x1200ext
+s2400x1800ext
+f2400x1800ext
+	DC.L ends2400x1800ext-s2400x1800ext
+	DC.W 42
+	DC.B '2400 X 1800 (Extended)'
+	DC.W 0
+ends2400x1800ext
+s3200x2400ext
+f3200x2400ext
+	DC.L ends3200x2400ext-s3200x2400ext
+	DC.W 44
+	DC.B '3200 X 2400 (Extended)'
+	DC.W 0
+ends3200x2400ext
+s4000x3000ext
+f4000x3000ext
+	DC.L ends4000x3000ext-s4000x3000ext
+	DC.W 46
+	DC.B '4000 X 3000 (Extended)'
+	DC.W 0
+ends4000x3000ext
+;======================================================================================
+;					Display Manager stuff
+;======================================================================================
+;;еееее Display Manager (((((
+timingUnknown			EQU	0		; unknown timing
+timingApple12			EQU	130		; 512x384 (60 Hz) 12" RGB
+timingApple12x			EQU	135		; 560x384 (60 Hz)
+timingApple13			EQU	140		; 640x480 (67 Hz) 13" RGB
+timingApple13x			EQU	145		; 640x400 (67 Hz)
+timingAppleVGA			EQU	150		; 640x480 (60 Hz) 12" VGA
+timingApple15			EQU	160		; 640x870 (75 Hz) full page display 
+timingApple15x			EQU	165		; 640x818 (75 Hz) full page display 818
+timingApple16			EQU	170		; 832x624 (75 Hz) 16" RGB
+timingAppleSVGA			EQU	180		; 800x600 (56 Hz) SVGA
+timingApple1ka			EQU	190		; 1024x768 (60 Hz) VESA 1K-60Hz
+timingApple1kb			EQU	200		; 1024x768 (70 Hz) VESA 1K-70Hz
+timingApple19			EQU	210		; 1024x768 (75 Hz) Apple 19" RGB
+timingApple21			EQU	220		; 1152x870 (75 Hz) Apple 21" RGB
+timingAppleNTSC_ST		EQU	230		; 512x384 (60 Hz, interlaced, nonconvolved)
+timingAppleNTSC_FF		EQU	232		; 640x480 (60 Hz, interlaced, nonconvolved)
+timingAppleNTSC_STconv	EQU	234		; 512x384 (60 Hz, interlaced, convolved)
+timingAppleNTSC_FFconv	EQU	236		; 640x480 (60 Hz, interlaced, convolved)
+timingApplePAL_ST		EQU	238		; 640x480 (50 Hz, interlaced, nonconvolved)
+timingApplePAL_FF		EQU	240		; 768x576 (50 Hz, interlaced, nonconvolved)
+timingApplePAL_STconv	EQU	242		; 640x480 (50 Hz, interlaced, convolved)
+timingApplePAL_FFconv	EQU	244		; 768x576 (50 Hz, interlaced, convolved)
+kModeValid		EQU	1		; optional
+kModeSafe		EQU	2		; required
+kModeDefault	EQU	4		; default
+; Video Scan Timings directory */
+svidparmdir
+	;;OSLstEntry	$80,v1280x1024
+	OSLstEntry	$81,v1152x870
+	OSLstEntry	$82,v1024x768_75
+	OSLstEntry	$83,v1024x768_60
+	OSLstEntry	$84,v832x624
+	OSLstEntry	$85,v640x480
+	OSLstEntry	$86,v640x870
+	DatLstEntry	$FF,0
+  IF	DO_12X10	THEN
+v1280x1024
+	DC.L timingUnknown	; TimingData
+  ENDIF
+v1152x870
+	DC.L timingApple21	; TimingData
+v1024x768_75
+	DC.L timingApple19	; TimingData
+v1024x768_60
+	DC.L timingApple1ka	; TimingData
+v832x624
+	DC.L timingApple16	; TimingData
+v640x480
+	DC.L timingApple13	; TimingData
+v640x870
+	DC.L timingApple15	; TimingData
+;;еееее Display Manager )))))
+;======================================================================================
+;					Board sResource Type Format
+;======================================================================================
+BoardType
+    dc.w  1   		; Category: Board
+    dc.w  0   		; Type:     Board
+    dc.w  0   		; 0 for Board
+    dc.w  0   		; 0 for Board
+;======================================================================================
+;					Board sResource Name
+;======================================================================================
+BoardName			; Official Product Name
+	IF	MAKING_HORI24	THEN
+	dc.b	'Horizon 24 2.0'
+	dc.w	0		; For Alignment
+	ENDIF
+	IF	MAKING_PBP	THEN
+	dc.b	'PaintBoard Pro 2.0'
+	dc.w	0		; For Alignment
+	ENDIF
+;======================================================================================
+;					Board sResource Name
+;======================================================================================
+	IF	0	THEN
+BoardIcon			; board icon
+	dc.b	$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb
+	dc.b	$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb
+	dc.b	$fb,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+	dc.b	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$fb,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$fb,$d8,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$fb,$d8,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$fb,$d8,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$fb,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb,$fb
+	dc.b	$fb,$d8,$d8,$d8,$fb,$fb,$fb,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$fb,$d8,$fb,$fb,$2a,$2a,$2a,$fb,$fb,$fb,$d8,$d8
+	dc.b	$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$fb,$fb,$fb,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$fb,$d8,$d8,$fb,$2a,$2a,$fb,$d8,$d8,$d8,$d8,$d8
+	dc.b	$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$fb,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$fb,$d8,$d8,$d8,$fb,$fb,$d8,$d8,$d8,$d8,$d8,$d8
+	dc.b	$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$fb,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$fb,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8
+	dc.b	$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$fb,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$fb,$d8,$d8,$d8,$fb,$fb,$d8,$d8,$d8,$d8,$d8,$d8
+	dc.b	$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$fb,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$fb,$d8,$d8,$fb,$2a,$2a,$fb,$d8,$d8,$d8,$d8,$d8
+	dc.b	$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$fb,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$fb,$d8,$fb,$fb,$2a,$2a,$2a,$fb,$fb,$fb,$d8,$d8
+	dc.b	$d8,$d8,$d8,$d8,$d8,$d8,$d8,$d8,$fb,$fb,$fb,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$fb,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb,$fb
+	dc.b	$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$00,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a
+	dc.b	$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$2a,$fb
+	dc.b	$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb
+	dc.b	$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb,$fb
+	dc.w	0		; For Alignment
+	ENDIF
+;======================================================================================
+;					Vendor Info
+;======================================================================================
+VendorInfo
+    OSLstEntry		1,vendordesign		; Vendor Design ID Offset
+    OSLstEntry		3,cardrevision		; Card's Revision Level Offset
+    OSLstEntry		4,cardpartnumber	; Card Part Number Offset
+	OSLstEntry		5,cardrevisiondate	; Card Revison Date Offset
+    DatLstEntry     endOfList,0			; End
+vendordesign
+    dc.b  'RasterOps'
+    dc.w  0				; For Alignment
+	
+	IF	MAKING_HORI24	THEN
+cardrevision
+    dc.b  'ROM Version: 2.0 PZE'
+    dc.w  0				; For Alignment
+cardpartnumber
+    dc.b  'Horizon24'
+    dc.w  0				; For Alignment
+	ENDIF
+	
+	IF	MAKING_PBP	THEN
+cardrevision
+    dc.b  'ROM Version: 2.0 PZE'
+    dc.w  0				; For Alignment
+cardpartnumber
+    dc.b  'PaintBoardPro'
+    dc.w  0				; For Alignment
+	ENDIF
+	
+cardrevisiondate
+    dc.b  'April 12, 1994'
+	dc.w  0
+;======================================================================================
+;					Resource Lists
+;======================================================================================
+  IF	DO_12X10	THEN
+;
+; My sResource List 80 -  1280 X 1024
+;
+sResList80
+    OSLstEntry		sRsrcType,MyType		; My sResource Type Format Offset
+    OSLstEntry		sRsrcName,MyName		; My sResource Name Offset
+    OSLstEntry		sRsrcDrvrDir,MyDrvrDir	; My sResource Driver Directory Offset
+    DatLstEntry		sRsrcFlags,6			; fOpenAtStart,f32BitMode
+    DatLstEntry		sRsrcHWDevId,1			; sRsrcHWDevId = 1
+    OSLstEntry		minorBaseOS,MinorBase	; MinorBase Offset
+    OSLstEntry		minorLength,MinorLen	; MinorLength Offset
+    OSLstEntry		sGammaDir,GammaDir		; Gamma correction table directory
+    OSLstEntry		$80,bits1parmlist12		; One-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$81,bits2parmlist12		; Two-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$82,bits4parmlist12		; Four-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$83,bits8parmlist12		; Eight-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$84,bits16parmlist12	; Sixteen-Bit-Per-Pixel Parameter List Offset
+    DatLstEntry     endOfList,0				; End
+	ENDIF
+;
+; My sResource List 81 - 1152 X 870
+;
+sResList81
+    OSLstEntry		sRsrcType,MyType		; My sResource Type Format Offset
+    OSLstEntry		sRsrcName,MyName		; My sResource Name Offset
+    OSLstEntry		sRsrcDrvrDir,MyDrvrDir	; My sResource Driver Directory Offset
+    DatLstEntry		sRsrcFlags,6			; fOpenAtStart,f32BitMode
+    DatLstEntry		sRsrcHWDevId,1			; sRsrcHWDevId = 1
+    OSLstEntry		minorBaseOS,MinorBase	; MinorBase Offset
+    OSLstEntry		minorLength,MinorLen	; MinorLength Offset
+    OSLstEntry		sGammaDir,GammaDir		; Gamma correction table directory
+    OSLstEntry		$80,bits1parmlist0		; One-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$81,bits2parmlist0		; Two-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$82,bits4parmlist0		; Four-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$83,bits8parmlist0		; Eight-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$84,bits16parmlist0		; Sixteen-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$85,bits24parmlist0		; Twenty-Four-Bit-Per-Pixel Parameter List Offset
+    DatLstEntry     endOfList,0				; End
+;
+; My sResource List 82 - 1024 X 768 75Hz
+;
+sResList82
+    OSLstEntry		sRsrcType,MyType		; My sResource Type Format Offset
+    OSLstEntry		sRsrcName,MyName		; My sResource Name Offset
+    OSLstEntry		sRsrcDrvrDir,MyDrvrDir	; My sResource Driver Directory Offset
+    DatLstEntry		sRsrcFlags,6			; fOpenAtStart,f32BitMode
+    DatLstEntry		sRsrcHWDevId,1			; sRsrcHWDevId = 1
+    OSLstEntry		minorBaseOS,MinorBase	; MinorBase Offset
+    OSLstEntry		minorLength,MinorLen	; MinorLength Offset
+    OSLstEntry		sGammaDir,GammaDir		; Gamma correction table directory
+    OSLstEntry		$80,bits1parmlist1		; One-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$81,bits2parmlist1		; Two-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$82,bits4parmlist1		; Four-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$83,bits8parmlist1		; Eight-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$84,bits16parmlist1		; Sixteen-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$85,bits24parmlist1		; Twenty-Four-Bit-Per-Pixel Parameter List Offset
+    DatLstEntry     endOfList,0				; End
+;
+; My sResource List 83 1024 X 768 60Hz
+;
+sResList83
+    OSLstEntry		sRsrcType,MyType		; My sResource Type Format Offset
+    OSLstEntry		sRsrcName,MyName		; My sResource Name Offset
+    OSLstEntry		sRsrcDrvrDir,MyDrvrDir	; My sResource Driver Directory Offset
+    DatLstEntry		sRsrcFlags,6			; sfOpenAtStart,f32BitMode
+    DatLstEntry		sRsrcHWDevId,1			; sRsrcHWDevId = 1
+    OSLstEntry		minorBaseOS,MinorBase	; MinorBase Offset
+    OSLstEntry		minorLength,MinorLen	; MinorLength Offset
+    OSLstEntry		sGammaDir,GammaDir		; Gamma correction table directory
+    OSLstEntry		$80,bits1parmlist1		; One-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$81,bits2parmlist1		; Two-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$82,bits4parmlist1		; Four-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$83,bits8parmlist1		; Eight-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$84,bits16parmlist1		; Sixteen-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$85,bits24parmlist1		; Twenty-Four-Bit-Per-Pixel Parameter List Offset
+    DatLstEntry     endOfList,0				; End
+;
+; My sResource List 84 - 832 X 624
+;
+sResList84
+    OSLstEntry		sRsrcType,MyType		; My sResource Type Format Offset
+    OSLstEntry		sRsrcName,MyName		; My sResource Name Offset
+    OSLstEntry		sRsrcDrvrDir,MyDrvrDir	; My sResource Driver Directory Offset
+    DatLstEntry		sRsrcFlags,6			; fOpenAtStart,f32BitMode
+    DatLstEntry		sRsrcHWDevId,1			; sRsrcHWDevId = 1
+    OSLstEntry		minorBaseOS,MinorBase	; MinorBase Offset
+    OSLstEntry		minorLength,MinorLen	; MinorLength Offset
+    OSLstEntry		sGammaDir,GammaDir		; Gamma correction table directory
+    OSLstEntry		$80,bits1parmlist2		; One-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$81,bits2parmlist2		; Two-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$82,bits4parmlist2		; Four-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$83,bits8parmlist2		; Eight-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$84,bits16parmlist2		; Sixteen-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$85,bits24parmlist2		; Twenty-Four-Bit-Per-Pixel Parameter List Offset
+    DatLstEntry     endOfList,0				; End
+;
+; My sResource List 85 - 640 X 480
+;
+sResList85
+    OSLstEntry		sRsrcType,MyType		; My sResource Type Format Offset
+    OSLstEntry		sRsrcName,MyName		; My sResource Name Offset
+    OSLstEntry		sRsrcDrvrDir,MyDrvrDir	; My sResource Driver Directory Offset
+    DatLstEntry		sRsrcFlags,6			; fOpenAtStart,f32BitMode
+    DatLstEntry		sRsrcHWDevId,1			; sRsrcHWDevId = 1
+    OSLstEntry		minorBaseOS,MinorBase	; MinorBase Offset
+    OSLstEntry		minorLength,MinorLen	; MinorLength Offset
+    OSLstEntry		sGammaDir,GammaDir		; Gamma correction table directory
+    OSLstEntry		$80,bits1parmlist3		; One-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$81,bits2parmlist3		; Two-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$82,bits4parmlist3		; Four-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$83,bits8parmlist3		; Eight-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$84,bits16parmlist3		; Sixteen-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$85,bits24parmlist3		; Twenty-Four-Bit-Per-Pixel Parameter List Offset
+    DatLstEntry     endOfList,0				; End
+;
+; My sResource List 86 -  640 X 870
+;
+sResList86
+    OSLstEntry		sRsrcType,MyType		; My sResource Type Format Offset
+    OSLstEntry		sRsrcName,MyName		; My sResource Name Offset
+    OSLstEntry		sRsrcDrvrDir,MyDrvrDir	; My sResource Driver Directory Offset
+    DatLstEntry		sRsrcFlags,6			; fOpenAtStart,f32BitMode
+    DatLstEntry		sRsrcHWDevId,1			; sRsrcHWDevId = 1
+    OSLstEntry		minorBaseOS,MinorBase	; MinorBase Offset
+    OSLstEntry		minorLength,MinorLen	; MinorLength Offset
+    OSLstEntry		sGammaDir,GammaDir		; Gamma correction table directory
+    OSLstEntry		$80,bits1parmlist7		; One-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$81,bits2parmlist7		; Two-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$82,bits4parmlist7		; Four-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$83,bits8parmlist7		; Eight-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$84,bits16parmlist7		; Sixteen-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$85,bits24parmlist7		; Twenty-Four-Bit-Per-Pixel Parameter List Offset
+    DatLstEntry     endOfList,0				; End
+;
+; My sResource List 8a - 1600 x 1200 extended
+;
+sResList8a
+    OSLstEntry		sRsrcType,MyType		; My sResource Type Format Offset
+    OSLstEntry		sRsrcName,MyName		; My sResource Name Offset
+    OSLstEntry		sRsrcDrvrDir,MyDrvrDir	; My sResource Driver Directory Offset
+    DatLstEntry		sRsrcFlags,6			; fOpenAtStart,f32BitMode
+    DatLstEntry		sRsrcHWDevId,1			; sRsrcHWDevId = 1
+    OSLstEntry		minorBaseOS,MinorBase	; MinorBase Offset
+    OSLstEntry		minorLength,MinorLen	; MinorLength Offset
+    OSLstEntry		sGammaDir,GammaDir		; Gamma correction table directory
+    OSLstEntry		$80,bits1parmlist6		; One-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$81,bits2parmlist6		; Two-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$82,bits4parmlist6		; Four-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$83,bits8parmlist6		; Eight-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$84,bits16parmlist6		; Sixteen-Bit-Per-Pixel Parameter List Offset
+    DatLstEntry     endOfList,0				; End
+;
+; My sResource List 8b - 2400 x 1800 extended
+;
+sResList8b
+    OSLstEntry		sRsrcType,MyType		; My sResource Type Format Offset
+    OSLstEntry		sRsrcName,MyName		; My sResource Name Offset
+    OSLstEntry		sRsrcDrvrDir,MyDrvrDir	; My sResource Driver Directory Offset
+    DatLstEntry		sRsrcFlags,6			; fOpenAtStart,f32BitMode
+    DatLstEntry		sRsrcHWDevId,1			; sRsrcHWDevId = 1
+    OSLstEntry		minorBaseOS,MinorBase	; MinorBase Offset
+    OSLstEntry		minorLength,MinorLen	; MinorLength Offset
+    OSLstEntry		sGammaDir,GammaDir		; Gamma correction table directory
+    OSLstEntry		$80,bits1parmlist13		; One-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$81,bits2parmlist13		; Two-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$82,bits4parmlist13		; Four-Bit-Per-Pixel Parameter List Offset
+    DatLstEntry     endOfList,0				; End
+;
+; My sResource List 8c - 3200 x 2400 extended
+;
+sResList8c
+    OSLstEntry		sRsrcType,MyType		; My sResource Type Format Offset
+    OSLstEntry		sRsrcName,MyName		; My sResource Name Offset
+    OSLstEntry		sRsrcDrvrDir,MyDrvrDir	; My sResource Driver Directory Offset
+    DatLstEntry		sRsrcFlags,6			; fOpenAtStart,f32BitMode
+    DatLstEntry		sRsrcHWDevId,1			; sRsrcHWDevId = 1
+    OSLstEntry		minorBaseOS,MinorBase	; MinorBase Offset
+    OSLstEntry		minorLength,MinorLen	; MinorLength Offset
+    OSLstEntry		sGammaDir,GammaDir		; Gamma correction table directory
+    OSLstEntry		$80,bits1parmlist5		; One-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$81,bits2parmlist5		; Two-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$82,bits4parmlist5		; Four-Bit-Per-Pixel Parameter List Offset
+    DatLstEntry     endOfList,0				; End
+;
+; My sResource List 8d - 4000 x 3000 extended
+;
+sResList8d
+    OSLstEntry		sRsrcType,MyType		; My sResource Type Format Offset
+    OSLstEntry		sRsrcName,MyName		; My sResource Name Offset
+    OSLstEntry		sRsrcDrvrDir,MyDrvrDir	; My sResource Driver Directory Offset
+    DatLstEntry		sRsrcFlags,6			; fOpenAtStart,f32BitMode
+    DatLstEntry		sRsrcHWDevId,1			; sRsrcHWDevId = 1
+    OSLstEntry		minorBaseOS,MinorBase	; MinorBase Offset
+    OSLstEntry		minorLength,MinorLen	; MinorLength Offset
+    OSLstEntry		sGammaDir,GammaDir		; Gamma correction table directory
+    OSLstEntry		$80,bits1parmlist14		; One-Bit-Per-Pixel Parameter List Offset
+    OSLstEntry		$81,bits2parmlist14		; Two-Bit-Per-Pixel Parameter List Offset
+    DatLstEntry     endOfList,0				; End
+;======================================================================================
+;					Constants
+;======================================================================================
+CatDisplay			EQU	$0003	; Display type of card
+TypVideo			EQU	$0001	; Video type of display
+DrSwApple			EQU	$0001	; Apple compatable software
+DrSwAUX				EQU	$0003	; AUX compatable software
+allSlaveBlockSizes	EQU	$0000800F	;
+MyType
+	dc.w	CatDisplay					; Category:  catDisplay
+	dc.w	TypVideo					; Type:      typVideo
+	dc.w	DrSwApple					; DrvrSw:    drSwApple
+    dc.w	DrHw						; DrvrHw	 
+MyName
+	IF	MAKING_HORI24	THEN
+	dc.b  'Display_Video_Apple_RasterOps_Horizon24'
+	dc.w  0								; For Alignment - ends the 'C' string
+	ENDIF
+	IF	MAKING_PBP	THEN
+	dc.b  'Display_Video_Apple_RasterOps_PaintBoardPro'
+	dc.w  0								; For Alignment - ends the 'C' string
+	ENDIF
+MinorBase
+    dc.l	0  							; No offset from normal beginning of slot space
+MinorLen
+    dc.l	$00400000 					; 4M of Video RAM
+;======================================================================================
+;					1280 X 1024
+;======================================================================================
+  IF	DO_12X10	THEN
+;
+; One-Bit-Per-Pixel Parameter List
+;
+bits1parmlist12
+    OSLstEntry		1,bits1parms12		; One-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; One-Bit-Per-Pixel Parameters sBlock
+bits1parms12
+    dc.l  endbits1parms12-bits1parms12	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,1024,1280)
+    dc.l  $04000500						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  1								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  1								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits1parms12
+;
+; Two-Bit-Per-Pixel Parameter List
+;
+bits2parmlist12
+    OSLstEntry		1,bits2parms12		; Two-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Two-Bit-Per-Pixel Parameters sBlock
+bits2parms12
+    dc.l  endbits2parms12-bits2parms12	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,1024,1280)
+    dc.l  $04000500						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  2								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  2								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits2parms12
+;
+; Four-Bit-Per-Pixel Parameter List
+;
+bits4parmlist12
+    OSLstEntry		1,bits4parms12		; Four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Four-Bit-Per-Pixel Parameters sBlock
+bits4parms12
+    dc.l  endbits4parms12-bits4parms12	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,1024,1280)
+    dc.l  $04000500						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  4								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  4								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits4parms12
+; Eight-Bit-Per-Pixel Parameter List
+bits8parmlist12
+    OSLstEntry		1,bits8parms12  	; Eight-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Eight-Bit-Per-Pixel Parameters sBlock
+bits8parms12
+    dc.l  endbits8parms12-bits8parms12	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,1024,1280)
+    dc.l  $04000500						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  8								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits8parms12
+; Sixteen-Bit-Per-Pixel Parameter List
+bits16parmlist12
+    OSLstEntry		1,bits16parms12  	; Twenty-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+; Sixteen-Bit-Per-Pixel Parameters sBlock
+bits16parms12
+    dc.l  endbits16parms12-bits16parms12	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,1024,1280)
+    dc.l  $04000500						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  16							; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  5								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits16parms12
+	ENDIF
+	
+;======================================================================================
+;					1152 X 870
+;======================================================================================
+;
+; One-Bit-Per-Pixel Parameter List
+;
+bits1parmlist0
+    OSLstEntry		1,bits1parms0		; One-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+;
+; One-Bit-Per-Pixel Parameters sBlock
+;
+bits1parms0
+    dc.l  endbits1parms0-bits1parms0	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,870,1152)
+    dc.l  $03660480						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  1								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  1								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits1parms0
+;
+; Two-Bit-Per-Pixel Parameter List
+;
+bits2parmlist0
+    OSLstEntry		1,bits2parms0		; Two-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+;Two-Bit-Per-Pixel Parameters sBlock
+bits2parms0
+    dc.l  endbits2parms0-bits2parms0	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,870,1152)
+    dc.l  $03660480						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  2								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  2								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits2parms0
+;
+; Four-Bit-Per-Pixel Parameter List
+;
+bits4parmlist0
+    OSLstEntry		1,bits4parms0		; Four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Four-Bit-Per-Pixel Parameters sBlock
+bits4parms0
+    dc.l  endbits4parms0-bits4parms0	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,870,1152)
+    dc.l  $03660480						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  4								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  4								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits4parms0
+; Eight-Bit-Per-Pixel Parameter List
+bits8parmlist0
+    OSLstEntry		1,bits8parms0  		; Eight-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Eight-Bit-Per-Pixel Parameters sBlock
+bits8parms0
+    dc.l  endbits8parms0-bits8parms0	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,870,1152)
+    dc.l  $03660480						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  8								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits8parms0
+; Sixteen-Bit-Per-Pixel Parameter List
+bits16parmlist0
+    OSLstEntry		1,bits16parms0  	; Sixteen-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+; Sixteen-Bit-Per-Pixel Parameters sBlock
+bits16parms0
+    dc.l  endbits16parms0-bits16parms0	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00  						; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,870,1152)
+    dc.l  $03660480						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  16 		; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  5								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits16parms0
+;
+; Twenty-four-Bit-Per-Pixel Parameter List
+;
+bits24parmlist0
+    OSLstEntry		1,bits24parms0  	; Twenty-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+; Twenty-four-Bit-Per-Pixel Parameters sBlock
+bits24parms0
+    dc.l  endbits24parms0-bits24parms0	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $1200  						; RowBytes 1152*4
+    dc.l  0								; BoundsRect: (0,0,870,1152)
+    dc.l  $03660480						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  32 		; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits24parms0
+;======================================================================================
+;					1024 X 768
+;======================================================================================
+;
+; One-Bit-Per-Pixel Parameter List
+;
+bits1parmlist1
+    OSLstEntry		1,bits1parms1		; One-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; One-Bit-Per-Pixel Parameters sBlock 
+bits1parms1
+    dc.l  endbits1parms1-bits1parms1	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,768,1024)
+    dc.l  $03000400						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  1								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  1								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits1parms1
+;
+; Two-Bit-Per-Pixel Parameter List
+;
+bits2parmlist1
+    OSLstEntry		1,bits2parms1		; Two-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Two-Bit-Per-Pixel Parameters sBlock 
+bits2parms1
+    dc.l  endbits2parms1-bits2parms1	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,768,1024)
+    dc.l  $03000400						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  2								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  2								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits2parms1
+;
+; Four-Bit-Per-Pixel Parameter List
+;
+bits4parmlist1
+    OSLstEntry		1,bits4parms1		; Four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Four-Bit-Per-Pixel Parameters sBlock 
+bits4parms1
+    dc.l  endbits4parms1-bits4parms1	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,768,1024)
+    dc.l  $03000400						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  4								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  4								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits4parms1
+; Eight-Bit-Per-Pixel Parameter List 
+bits8parmlist1
+    OSLstEntry		1,bits8parms1  		; Eight-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Eight-Bit-Per-Pixel Parameters sBlock 
+bits8parms1
+    dc.l  endbits8parms1-bits8parms1	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,768,1024)
+    dc.l  $03000400						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  8								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits8parms1
+; Sixteen-Bit-Per-Pixel Parameter List 
+bits16parmlist1
+    OSLstEntry		1,bits16parms1  	; Twenty-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+; Sixteen-Bit-Per-Pixel Parameters sBlock
+bits16parms1
+    dc.l  endbits16parms1-bits16parms1	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00  						; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,768,1024)
+    dc.l  $03000400						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  16 		; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  5								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits16parms1
+;
+; Twenty-four-Bit-Per-Pixel Parameter List
+;
+bits24parmlist1
+    OSLstEntry		1,bits24parms1  	; Twenty-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+; Twenty-four-Bit-Per-Pixel Parameters sBlock
+bits24parms1
+    dc.l  endbits24parms1-bits24parms1	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $1200  						; RowBytes 1152*4
+    dc.l  0								; BoundsRect: (0,0,768,1024)
+    dc.l  $03000400						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  32 		; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits24parms1
+;======================================================================================
+;					832 X 624
+;======================================================================================
+;
+; One-Bit-Per-Pixel Parameter List
+;
+bits1parmlist2
+    OSLstEntry		1,bits1parms2		; One-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+;  One-Bit-Per-Pixel Parameters sBlock
+bits1parms2
+    dc.l  endbits1parms2-bits1parms2	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,624,832)
+    dc.l  $02700340						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  1								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  1								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits1parms2
+;
+; Two-Bit-Per-Pixel Parameter List
+;
+bits2parmlist2
+    OSLstEntry		1,bits2parms2		; Two-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+;  Two-Bit-Per-Pixel Parameters sBlock
+bits2parms2
+    dc.l  endbits2parms2-bits2parms2	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,624,832)
+    dc.l  $02700340						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  2								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  2								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits2parms2
+;
+; Four-Bit-Per-Pixel Parameter List
+;
+bits4parmlist2
+    OSLstEntry		1,bits4parms2		; Four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+;  Four-Bit-Per-Pixel Parameters sBlock
+bits4parms2
+    dc.l  endbits4parms2-bits4parms2	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,624,832)
+    dc.l  $02700340						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  4								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  4								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits4parms2
+;  Eight-Bit-Per-Pixel Parameter List
+bits8parmlist2
+    OSLstEntry		1,bits8parms2  		; Eight-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+;  Eight-Bit-Per-Pixel Parameters sBlock
+bits8parms2
+    dc.l  endbits8parms2-bits8parms2	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,624,832)
+    dc.l  $02700340						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  8								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits8parms2
+;  Sixteen-Bit-Per-Pixel Parameter List
+bits16parmlist2
+    OSLstEntry		1,bits16parms2  	; Twenty-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+;  Sixteen-Bit-Per-Pixel Parameters sBlock
+bits16parms2
+    dc.l  endbits16parms2-bits16parms2	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00  						; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,624,832)
+    dc.l  $02700340						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  16 		; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  5								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits16parms2
+;
+; Twenty-four-Bit-Per-Pixel Parameter List
+;
+bits24parmlist2
+    OSLstEntry		1,bits24parms2  	; Twenty-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+;  Twenty-four-Bit-Per-Pixel Parameters sBlock
+bits24parms2
+    dc.l  endbits24parms2-bits24parms2	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $1200  						; RowBytes 1152*4
+    dc.l  0								; BoundsRect: (0,0,624,832)
+    dc.l  $02700340						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  32							; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0  			; PlaneBytes Offset
+endbits24parms2
+;======================================================================================
+;					640 X 480
+;======================================================================================
+;
+; One-Bit-Per-Pixel Parameter List
+;
+bits1parmlist3
+    OSLstEntry		1,bits1parms3		; One-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; One-Bit-Per-Pixel Parameters sBlock
+bits1parms3
+    dc.l  endbits1parms3-bits1parms3	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,480,640)
+    dc.l  $01E00280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  1								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  1								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits1parms3
+;
+; Two-Bit-Per-Pixel Parameter List
+;
+bits2parmlist3
+    OSLstEntry		1,bits2parms3		; Two-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Two-Bit-Per-Pixel Parameters sBlock
+bits2parms3
+    dc.l  endbits2parms3-bits2parms3	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,480,640)
+    dc.l  $01E00280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  2								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  2								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits2parms3
+;
+; Four-Bit-Per-Pixel Parameter List
+;
+bits4parmlist3
+    OSLstEntry		1,bits4parms3		; Four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Four-Bit-Per-Pixel Parameters sBlock
+bits4parms3
+    dc.l  endbits4parms3-bits4parms3	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,480,640)
+    dc.l  $01E00280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  4								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  4								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits4parms3
+; Eight-Bit-Per-Pixel Parameter List
+bits8parmlist3
+    OSLstEntry		1,bits8parms3  		; Eight-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Eight-Bit-Per-Pixel Parameters sBlock
+bits8parms3
+    dc.l  endbits8parms3-bits8parms3	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,480,640)
+    dc.l  $01E00280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  8								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits8parms3
+; Sixteen-Bit-Per-Pixel Parameter List
+bits16parmlist3
+    OSLstEntry		1,bits16parms3  	; Twenty-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+; Sixteen-Bit-Per-Pixel Parameters sBlock
+bits16parms3
+    dc.l  endbits16parms3-bits16parms3	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00  						; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,480,640)
+    dc.l  $01E00280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  16 		; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  5								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits16parms3
+;
+; Twenty-four-Bit-Per-Pixel Parameter List
+;
+bits24parmlist3
+    OSLstEntry		1,bits24parms3  	; Twenty-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+; Twenty-four-Bit-Per-Pixel Parameters sBlock
+bits24parms3
+    dc.l  endbits24parms3-bits24parms3	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $1200  						; RowBytes 1152*4
+    dc.l  0								; BoundsRect: (0,0,480,640)
+    dc.l  $01E00280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  32							; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits24parms3
+;======================================================================================
+;					640 X 870
+;======================================================================================
+;
+; One-Bit-Per-Pixel Parameter List
+;
+bits1parmlist7
+    OSLstEntry		1,bits1parms7		; One-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; One-Bit-Per-Pixel Parameters sBlock
+bits1parms7
+    dc.l  endbits1parms7-bits1parms7	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,870,640)
+    dc.l  $03660280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  1								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  1								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits1parms7
+;
+; Two-Bit-Per-Pixel Parameter List
+;
+bits2parmlist7
+    OSLstEntry		1,bits2parms7		; Two-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Two-Bit-Per-Pixel Parameters sBlock
+bits2parms7
+    dc.l  endbits2parms7-bits2parms7	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,870,640)
+    dc.l  $03660280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  2								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  2								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits2parms7
+;
+; Four-Bit-Per-Pixel Parameter List
+;
+bits4parmlist7
+    OSLstEntry		1,bits4parms7		; Four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Four-Bit-Per-Pixel Parameters sBlock
+bits4parms7
+    dc.l  endbits4parms7-bits4parms7	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,870,640)
+    dc.l  $03660280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  4								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  4								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits4parms7
+; Eight-Bit-Per-Pixel Parameter List
+bits8parmlist7
+    OSLstEntry		1,bits8parms7  		; Eight-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Eight-Bit-Per-Pixel Parameters sBlock
+bits8parms7
+    dc.l  endbits8parms7-bits8parms7	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00							; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,870,640)
+    dc.l  $03660280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  8								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits8parms7
+; Sixteen-Bit-Per-Pixel Parameter List
+bits16parmlist7
+    OSLstEntry		1,bits16parms7  	; Twenty-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+; Sixteen-Bit-Per-Pixel Parameters sBlock
+bits16parms7
+    dc.l  endbits16parms7-bits16parms7	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0a00  						; RowBytes 1280*2
+    dc.l  0								; BoundsRect: (0,0,870,640)
+    dc.l  $03660280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  16 		; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  5								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits16parms7
+;
+; Twenty-four-Bit-Per-Pixel Parameter List
+;
+bits24parmlist7
+    OSLstEntry		1,bits24parms7  	; Twenty-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+; Twenty-four-Bit-Per-Pixel Parameters sBlock
+bits24parms7
+    dc.l  endbits24parms7-bits24parms7	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $1200  						; RowBytes 1152*4
+    dc.l  0								; BoundsRect: (0,0,870,640)
+    dc.l  $03660280						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  32							; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits24parms7
+;======================================================================================
+;					1600 x 1200
+;======================================================================================
+;
+; One-Bit-Per-Pixel Parameter List
+;
+bits1parmlist6
+    OSLstEntry		1,bits1parms6		; One-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; One-Bit-Per-Pixel Parameters sBlock
+bits1parms6
+    dc.l  endbits1parms6-bits1parms6	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $d00							; RowBytes 3328
+    dc.l  0								; BoundsRect: (0,0,1200,1600)
+    dc.l  $04B00640						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  1								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  1								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits1parms6
+;
+; Two-Bit-Per-Pixel Parameter List
+;
+bits2parmlist6
+    OSLstEntry		1,bits2parms6		; Two-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Two-Bit-Per-Pixel Parameters sBlock
+bits2parms6
+    dc.l  endbits2parms6-bits2parms6	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $d00							; RowBytes 3328
+    dc.l  0								; BoundsRect: (0,0,1200,1600)
+    dc.l  $04B00640						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  2								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  2								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits2parms6
+;
+; Four-Bit-Per-Pixel Parameter List
+;
+bits4parmlist6
+    OSLstEntry		1,bits4parms6		; Four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Four-Bit-Per-Pixel Parameters sBlock
+bits4parms6
+    dc.l  endbits4parms6-bits4parms6	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $d00							; RowBytes 3328
+    dc.l  0								; BoundsRect: (0,0,1200,1600)
+    dc.l  $04B00640						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  4								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  4								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits4parms6
+; Eight-Bit-Per-Pixel Parameter List
+bits8parmlist6
+    OSLstEntry		1,bits8parms6  		; Eight-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Eight-Bit-Per-Pixel Parameters sBlock
+bits8parms6
+    dc.l  endbits8parms6-bits8parms6	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $d00							; RowBytes 3328
+    dc.l  0								; BoundsRect: (0,0,1200,1600)
+    dc.l  $04B00640						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  8								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  8								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits8parms6
+;    dc.w  $d00				; RowBytes 3328xxxxxxx
+; Sixteen-Bit-Per-Pixel Parameter List
+bits16parmlist6
+    OSLstEntry		1,bits16parms6  	; Twenty-four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,2					; Device Type: 2 - DirectType
+    DatLstEntry     endOfList,0			; End
+; Sixteen-Bit-Per-Pixel Parameters sBlock
+bits16parms6
+    dc.l  endbits16parms6-bits16parms6	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $d00							; RowBytes 3328
+    dc.l  0								; BoundsRect: (0,0,1200,1600)
+    dc.l  $04B00640						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused (normally, but we're going to use it for our 24-bit environment flags)
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  $10							; Pixel Type ($10=ChunkyDirect)
+    dc.w  16 							; Pixel Size (must be power of 2)
+    dc.w  3								; Components in Pixel
+    dc.w  5								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits16parms6
+;======================================================================================
+;					2400 x 1800
+;======================================================================================
+;
+; One-Bit-Per-Pixel Parameter List
+;
+bits1parmlist13
+    OSLstEntry		1,bits1parms13		; One-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; One-Bit-Per-Pixel Parameters sBlock
+bits1parms13
+    dc.l  endbits1parms13-bits1parms13	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0800							; RowBytes 2048
+    dc.l  0								; BoundsRect: (0,0,1800,2400)
+    dc.l  $07080960						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  1								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  1								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits1parms13
+;
+; Two-Bit-Per-Pixel Parameter List
+;
+bits2parmlist13
+    OSLstEntry		1,bits2parms13		; Two-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Two-Bit-Per-Pixel Parameters sBlock
+bits2parms13
+    dc.l  endbits2parms13-bits2parms13	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0800							; RowBytes 2048
+    dc.l  0								; BoundsRect: (0,0,1800,2400)
+    dc.l  $07080960						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  2								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  2								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits2parms13
+;
+; Four-Bit-Per-Pixel Parameter List
+;
+bits4parmlist13
+    OSLstEntry		1,bits4parms13		; Four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Four-Bit-Per-Pixel Parameters sBlock
+bits4parms13
+    dc.l  endbits4parms13-bits4parms13	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0800							; RowBytes 2048
+    dc.l  0								; BoundsRect: (0,0,1800,2400)
+    dc.l  $07080960						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  4								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  4								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits4parms13
+;======================================================================================
+;					3200 x 2400
+;======================================================================================
+;
+; One-Bit-Per-Pixel Parameter List
+;
+bits1parmlist5
+    OSLstEntry		1,bits1parms5		; One-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; One-Bit-Per-Pixel Parameters sBlock
+bits1parms5
+    dc.l  endbits1parms5-bits1parms5	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0680							; RowBytes 1664
+    dc.l  0								; BoundsRect: (0,0,2400, 3200)
+    dc.l  $09600C80						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  1								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  1								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits1parms5
+;
+; Two-Bit-Per-Pixel Parameter List
+;
+bits2parmlist5
+    OSLstEntry		1,bits2parms5		; Two-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Two-Bit-Per-Pixel Parameters sBlock
+bits2parms5
+    dc.l  endbits2parms5-bits2parms5	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0680							; RowBytes 1664
+    dc.l  0								; BoundsRect: (0,0,2400, 3200)
+    dc.l  $09600C80						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  2								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  2								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits2parms5
+;
+; Four-Bit-Per-Pixel Parameter List
+;
+bits4parmlist5
+    OSLstEntry		1,bits4parms5		; Four-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Four-Bit-Per-Pixel Parameters sBlock
+bits4parms5
+    dc.l  endbits4parms5-bits4parms5	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0680							; RowBytes 1664
+    dc.l  0								; BoundsRect: (0,0,2400, 3200)
+    dc.l  $09600C80						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  4								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  4								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits4parms5
+;======================================================================================
+;					4000 x 3000
+;======================================================================================
+;
+; One-Bit-Per-Pixel Parameter List
+;
+bits1parmlist14
+    OSLstEntry		1,bits1parms14		; One-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; One-Bit-Per-Pixel Parameters sBlock
+bits1parms14
+    dc.l  endbits1parms14-bits1parms14	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0400							; RowBytes 1024
+    dc.l  0								; BoundsRect: (0,0,3000, 4000)
+    dc.l  $0bb80fa0						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  1								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  1								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits1parms14
+;
+; Two-Bit-Per-Pixel Parameter List
+;
+bits2parmlist14
+    OSLstEntry		1,bits2parms14		; Two-Bit-Per-Pixel Parameters sBlock Offset
+    DatLstEntry		3,1					; Number of Pages: 1
+    DatLstEntry		4,0					; Device Type: 0
+    DatLstEntry     endOfList,0			; End
+; Two-Bit-Per-Pixel Parameters sBlock
+bits2parms14
+    dc.l  endbits2parms14-bits2parms14	; Length of sBlock
+    dc.l  $0400							; Offset to Page 0 of Video RAM: 1024
+    dc.w  $0400							; RowBytes 1024
+    dc.l  0								; BoundsRect: (0,0,3000, 4000)
+    dc.l  $0bb80fa0						;
+    dc.w  0								; PixMap Version Number
+    dc.w  0								; unused
+    dc.l  0								; unused
+    dc.l  $00480000						; Horizontal Res
+    dc.l  $00480000						; Vertical Res
+    dc.w  0								; Pixel Type (0=Chunky)
+    dc.w  2								; Pixel Size
+    dc.w  1								; Components in Pixel
+    dc.w  2								; Bits Per Component
+    dc.l  0								; PlaneBytes Offset
+endbits2parms14
+;======================================================================================
+;					 My sResource Gamma Directory
+;======================================================================================
+GammaDir
+    OSLstEntry		$80,MyGamma			; My ID 80 Gamma Table sBlock Offset
+    DatLstEntry     endOfList,0			; End
+; My 68020 Driver sBlock
+MyGamma
+    dc.l  endMyGamma-MyGamma			; Length of sBlock
+	DC.W	0				; Local ID
+	IF	MAKING_HORI24	THEN
+    DC.B	'Horizon24'		; Mode Name
+	ENDIF
+	IF	MAKING_PBP		THEN
+    DC.B	'PaintBoardPro'		; Mode Name
+	ENDIF
+ 	DC.B	0				; end C String
+	DC.W	0				; gVersion 0
+    DC.W	DrHw			;
+	DC.W	0				; gFormulaSize 0
+	DC.W	1				; gChanCnt 1
+	DC.W    512				; gDataCnt 512
+	DC.W    9				; gDataWidth 9
+	dc.w    $000,$005,$00a,$00e,$012,$014,$016,$019,$01c,$01e,$020,$023,$026,$028,$02a,$02c
+	dc.w    $02e,$030,$032,$034,$036,$038,$03a,$03b,$03c,$03e,$040,$042,$044,$046,$048,$049
+	dc.w    $04a,$04c,$04e,$04f,$050,$052,$054,$056,$058,$059,$05a,$05c,$05e,$05f,$060,$061
+	dc.w    $062,$064,$066,$067,$068,$06a,$06c,$06d,$06e,$06f,$070,$072,$074,$075,$076,$077
+	dc.w    $078,$07a,$07c,$07d,$07e,$07f,$080,$082,$084,$085,$086,$087,$088,$089,$08a,$08c
+	dc.w    $08e,$08f,$090,$091,$092,$093,$094,$095,$096,$098,$09a,$09b,$09c,$09d,$09e,$09f
+	dc.w    $0a0,$0a1,$0a2,$0a3,$0a4,$0a6,$0a8,$0a9,$0aa,$0ab,$0ac,$0ad,$0ae,$0af,$0b0,$0b1
+	dc.w    $0b2,$0b3,$0b4,$0b5,$0b6,$0b7,$0b8,$0ba,$0bc,$0bd,$0be,$0bf,$0c0,$0c1,$0c2,$0c3
+	dc.w    $0c4,$0c5,$0c6,$0c7,$0c8,$0c9,$0ca,$0cb,$0cc,$0cd,$0ce,$0cf,$0d0,$0d1,$0d2,$0d3
+	dc.w    $0d4,$0d5,$0d6,$0d7,$0d8,$0d9,$0da,$0db,$0dc,$0dd,$0de,$0df,$0e0,$0e1,$0e2,$0e3
+	dc.w    $0e4,$0e5,$0e6,$0e7,$0e8,$0e9,$0ea,$0eb,$0ec,$0ed,$0ee,$0ef,$0f0,$0f1,$0f2,$0f3
+	dc.w    $0f4,$0f5,$0f6,$0f7,$0f8,$0f9,$0fa,$0fb,$0fc,$0fd,$0fe,$0ff,$100,$101,$102,$102
+	dc.w    $102,$103,$104,$105,$106,$107,$108,$109,$10a,$10b,$10c,$10d,$10e,$10f,$110,$111
+	dc.w    $112,$113,$114,$115,$116,$117,$118,$118,$118,$119,$11a,$11b,$11c,$11d,$11e,$11f
+	dc.w    $120,$121,$122,$123,$124,$125,$126,$127,$128,$129,$12a,$12a,$12a,$12b,$12c,$12d
+	dc.w    $12e,$12f,$130,$131,$132,$133,$134,$135,$136,$136,$136,$137,$138,$139,$13a,$13b
+	dc.w    $13c,$13d,$13e,$13f,$140,$141,$142,$142,$142,$143,$144,$145,$146,$147,$148,$149
+	dc.w    $14a,$14b,$14c,$14c,$14c,$14d,$14e,$14f,$150,$151,$152,$153,$154,$155,$156,$156
+	dc.w    $156,$157,$158,$159,$15a,$15b,$15c,$15d,$15e,$15f,$160,$160,$160,$161,$162,$163
+	dc.w    $164,$165,$166,$167,$168,$168,$168,$169,$16a,$16b,$16c,$16d,$16e,$16f,$170,$170
+	dc.w    $170,$171,$172,$173,$174,$175,$176,$177,$178,$178,$178,$179,$17a,$17b,$17c,$17d
+	dc.w    $17e,$17f,$180,$180,$180,$181,$182,$183,$184,$185,$186,$186,$186,$187,$188,$189
+	dc.w    $18a,$18b,$18c,$18d,$18e,$18e,$18e,$18f,$190,$191,$192,$193,$194,$194,$194,$195
+	dc.w    $196,$197,$198,$199,$19a,$19a,$19a,$19b,$19c,$19d,$19e,$19f,$1a0,$1a0,$1a0,$1a1
+	dc.w    $1a2,$1a3,$1a4,$1a5,$1a6,$1a6,$1a6,$1a7,$1a8,$1a9,$1aa,$1ab,$1ac,$1ac,$1ac,$1ad
+	dc.w    $1ae,$1af,$1b0,$1b1,$1b2,$1b2,$1b2,$1b3,$1b4,$1b5,$1b6,$1b7,$1b8,$1b8,$1b8,$1b9
+	dc.w    $1ba,$1bb,$1bc,$1bd,$1be,$1be,$1be,$1bf,$1c0,$1c1,$1c2,$1c2,$1c2,$1c3,$1c4,$1c5
+	dc.w    $1c6,$1c7,$1c8,$1c8,$1c8,$1c9,$1ca,$1cb,$1cc,$1cd,$1ce,$1ce,$1ce,$1cf,$1d0,$1d1
+	dc.w    $1d2,$1d2,$1d2,$1d3,$1d4,$1d5,$1d6,$1d7,$1d8,$1d8,$1d8,$1d9,$1da,$1db,$1dc,$1dc
+	dc.w    $1dc,$1dd,$1de,$1df,$1e0,$1e1,$1e2,$1e2,$1e2,$1e3,$1e4,$1e5,$1e6,$1e6,$1e6,$1e7
+	dc.w    $1e8,$1e9,$1ea,$1ea,$1ea,$1eb,$1ec,$1ed,$1ee,$1ef,$1f0,$1f0,$1f0,$1f1,$1f2,$1f3
+	dc.w    $1f4,$1f4,$1f4,$1f5,$1f6,$1f7,$1f8,$1f8,$1f8,$1f9,$1fa,$1fb,$1fc,$1fd,$1fe,$1ff
+endMyGamma
+; My sResource Driver Directory
+MyDrvrDir
+	;;;;OSLstEntry		2,Drvr			; My 68020 Driver sBlock Offset
+    dc.b			'Dxxx'				; My 68020 Driver sBlock Offset
+    DatLstEntry     endOfList,0			; End
+	end

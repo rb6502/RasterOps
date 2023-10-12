@@ -1,0 +1,35 @@
+;
+;	File:		Tail.a
+;
+;	Contains:	rom tail
+;
+;	Written by:	Eric Kuo
+;
+;	Copyright:	© 1994 by RasterOps, Inc., all rights reserved.
+;
+;	Change History (most recent first):
+;
+;		 <1>	 3/21/94	ek		first checked in
+;
+;	This file is only for
+;		32k rom
+;		bytelane 3
+;	To make 16k rom, make 3fec = $00ffc014
+;
+		STRING		ASIS
+Formatblock	proc
+	;;dc.l  ((directory-formatblock)&$00FFFFFF) ; 7fec	Negative offset to beginning (sResource Directory)
+	;;dc.l  $00ff8014		; 7fec	Negative offset to beginning (sResource Directory = 0)
+	dc.l  'Txxx'		; 7fec	Negative offset to beginning (sResource Directory = 0)
+	dc.l  1				; 7ff0	FAKE ROM LENGTH OF 1
+	dc.l  $78			; 7ff4	FAKE ROM CHECKSUM OF 78 (LAST BYTE IN ROM [ByteLanes])
+	dc.b  1				; 7ff8	Revision 1 ROM
+	dc.b  1				; 7ff9	Apple Format ROM
+	dc.l  $5A932BC7		; 7ffa	Test Pattern
+	dc.b  0				; 7ffe	Reserved (Must be 0)
+	dc.b  $78			; 7fff	Only Lowest Byte in Longwords used
+	endp
+	
+	end
+	
+	

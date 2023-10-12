@@ -1,0 +1,48 @@
+;
+;	File:		PInit.a
+;
+;	Contains:	prim init header and asmbly routines
+;
+;	Written by:	Eric Kuo
+;
+;	Copyright:	й 1994 by RasterOps, Inc., all rights reserved.
+;
+;	Change History (most recent first):
+;
+;		 <1>	 03/21/94	ek		converted from Aztec to MPW C
+;
+;
+	include 'Rom.a'
+	
+	import	endPInit,cPInit
+	
+PInit	proc	export
+    dc.l  endPInit-PInit        ; Length of seBlock
+    dc.b  2                     ; Revision Level 2 (The Slot Manager REQUIRES this to be 2!)
+    dc.b  2                     ; CPU ID 2 (68020)
+    dc.w  0                     ; Reserved
+    dc.l  4                     ; Code Offset 4  (In other words, next!)
+	
+;
+; On Entry:  a0 -> Slot Manager seBlock
+;
+	movem.l a0-a5/d0-d7,-(sp)  	; save nearly all registers	
+	move.l	a0,-(sp)			; push SeBlock pointer
+	jsr		cPInit				; call our c routine
+	lea		4(sp),sp			; repair stack caused by c call
+	movem.l (sp)+,a0-a5/d0-d7	; Restore nearly all registers
+	rts
+	endp
+	
+;еееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееее
+; 				asm routines
+;еееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееее
+;
+; _BusError
+;
+BusError	proc	export
+	add.l	#4,2(sp)
+	rte
+	endp
+	
+	END

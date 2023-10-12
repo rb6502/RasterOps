@@ -1,0 +1,75 @@
+;
+;	File:		SInit.a
+;
+;	Contains:	Secondary Init header and asmbly routines
+;
+;	Written by:	Eric Kuo
+;
+;	Copyright:	й 1994 by RasterOps, Inc., all rights reserved.
+;
+;	Change History (most recent first):
+;
+;		 <1>	 3/21/94	ek		first checked in
+;
+;
+	include 'Rom.a'
+	
+	import	endSInit,cSInit
+SInit proc	export
+;
+; On Entry:  a0 -> Slot Manager seBlock
+;
+    dc.l  endSInit-SInit    	; Length of seBlock
+    dc.b  2                     ; Revision Level 2 (The Slot Manager REQUIRES this to be 2!)
+    dc.b  2                     ; CPU ID 2 (68020)
+    dc.w  0                     ; Reserved
+    dc.l  4                     ; Code Offset 4  (In other words, next!)
+	movem.l a0-a5/d0-d7,-(sp)  	; save nearly all registers	
+	move.l	a0,-(sp)			; push SeBlock pointer
+	jsr		cSInit				; call our c routine
+	lea		4(sp),sp			; repair stack caused by c call
+	movem.l (sp)+,a0-a5/d0-d7	; Restore nearly all registers
+	rts
+	endp
+;еееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееее
+; 				asm routines
+;еееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееее
+;
+; PatchGDev
+;
+PatchGDev	proc	export
+	; Patch gDevice
+	CLR.L	-(SP)			; space for handle
+	DC.W	$AA32			; GetGDevice
+	MOVEA.L	(SP)+,A0		; gDevice Handle
+	MOVEA.L	(A0),A0			; gDevice Pointer
+	MOVEA.L	22(A0),A0		; gdPMap (PixMapHandle)
+	MOVEA.L	(A0),A0			; PixMapPtr
+	
+	MOVE.L	(A0),D0			; get pmBaseAddr
+	ANDI.L	#$FF000000,D0	; check if it's us
+	CMP.L	8(A6),D0
+	BNE.S	notboot2			; no, leave it as is
+	ANDI.L	#$FF0FFFFF,(A0)	; yes, pmBaseAddr gets Fs0XXXXX in place of FssXXXXX
+notboot2
+	rts
+	endp
+	
+;
+; ShutDwnStartIIci()
+;
+ShutDwnStartIIci	proc	export
+;	ShutDwnStart();
+	dc.w	$3f3c
+	dc.w	$0002
+	dc.w	$a895
+	endp
+				
+;
+; ShutDwnStartIIcx()
+;
+ShutDwnStartIIcx	proc	export
+	move.l	ROMBase,a0
+	jmp		$0a(a0)
+	endp
+	end

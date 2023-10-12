@@ -1,0 +1,309 @@
+;
+;	File:		VenusTbl.a
+;
+;	Contains:	Venus tables
+;
+;	Written by:	Eric Kuo
+;
+;	Copyright:	й 1994 by RasterOps, Inc., all rights reserved.
+;
+;	Change History (most recent first):
+;
+;		 <1>	 4/14/94	ek		first checked in
+;
+;еееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееее
+;  		Venus addresses (device dependent)
+;еееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееее
+;
+; venus register addresses on a Horizon24. PBPro board
+;
+gVenusRegAddr	proc	export
+	dc.l	$00F00600		; V_CONTROL1				= 0,
+	dc.l	$00F00604		; V_CONTROL2				= 1,
+	dc.l	$00F00608		; V_CONTROL3				= 2,
+	dc.l	$00F0060C		; V_CONTROL4				= 3,
+	dc.l	$00F00610		; V_STATUS					= 4,
+	dc.l	$00F00614		; V_REFRESH_INTERVAL		= 5,
+	dc.l	$00F00618		; V_GIOCONFIG				= 6,
+	dc.l	$00F0061C		;		V_FILLER1			= 7,
+	dc.l	$00F00620		; V_DISPLAYSTART			= 8,
+	dc.l	$00F00624		;		V_FILLER2			= 9,
+	dc.l	$00F00628		;		V_FILLER3			= 10,
+	dc.l	$00F0062C		;		V_FILLER4			= 11,
+	dc.l	$00F00630		; V_HALF_ROWINC			= 12,
+	dc.l	$00F00634		;		V_FILLER5			= 13,
+	dc.l	$00F00638		;		V_FILLER6			= 14,
+	dc.l	$00F0063C		;		V_FILLER7			= 15,
+	dc.l	$00F00640		; V_DISP_PITCH				= 16,
+	dc.l	$00F00644		;		V_FILLER8			= 17,
+	dc.l	$00F00648		;		V_FILLER9			= 18,
+	dc.l	$00F0064C		;		V_FILLER10			= 19,
+	dc.l	$00F00650		; V_CASMASK				= 20,
+	dc.l	$00F00654		; V_HORI_LATENCY			= 21,
+	dc.l	$00F00658		; V_HORI_ENDSYNC			= 22,
+	dc.l	$00F0065C		;		V_FILLER11			= 23,
+	dc.l	$00F00660		; V_HORI_ENDBLANK			= 24,
+	dc.l	$00F00664		;		V_FILLER12			= 25,
+	dc.l	$00F00668		; V_HORI_STARTBLANK		= 26,
+	dc.l	$00F0066C		;		V_FILLER13			= 27,
+	dc.l	$00F00670		; V_HORI_TOTAL				= 28,
+	dc.l	$00F00674		;		V_FILLER14			= 29,
+	dc.l	$00F00678		; V_HORI_HALFLINE			= 30,
+	dc.l	$00F0067C		;		V_FILLER15			= 31,
+	dc.l	$00F00680		; V_HORI_COUNTLOAD			= 32,
+	dc.l	$00F00684		;		V_FILLER16			= 33,
+	dc.l	$00F00688		; V_VERT_ENDSYNC			= 34,
+	dc.l	$00F0068C		; V_VERT_ENDBLANK			= 35,
+	dc.l	$00F00690		; V_VERT_STARTBLANK		= 36,
+	dc.l	$00F00694		;		V_FILLER17			= 37,
+	dc.l	$00F00698		; V_VERT_TOTAL				= 38,
+	dc.l	$00F0069C		;		V_FILLER18			= 39,
+	dc.l	$00F006A0		; V_VERT_COUNTLOAD			= 40,
+	dc.l	$00F006A4		;		V_FILLER19			= 41,
+	dc.l	$00F006A8		; V_VERT_INTLINE			= 42,
+	dc.l	$00F006AC		;		V_FILLER20			= 43,
+	dc.l	$00F006B0		; V_GIO					= 44,
+	dc.l	$00F006B4		;		V_FILLER21			= 45,
+	dc.l	$00F006B8		; V_YZOOM					= 46,
+	dc.l	$00F006BC		; V_SOFTREG				= 47
+	endp
+;еееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееее
+;  		Venus timing table (device dependent)
+;еееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееееее
+; 14 Tables of 48 bytes each, corresponding to the
+; registers on the RGS14188.
+;
+; Resolutions to be supported:
+; 0 - 1152 X 870 75Hz
+; 1 - 1024 X 768 75Hz
+; 2 - 1024 X 768 60Hz
+; 3 -  832 X 624 67Hz
+; 4 -  640 X 480 67Hz
+; 5 -  640 X 870
+; 6 -  640 X 480 NTSC
+; 7 -  768 X 576 PAL
+; 8 -  576 X 432 NTSC
+; 9 -  684 X 512 PAL
+;
+	;  Table 0	1280 X 1024
+venus12x10	proc	export
+	DC.B	$01		; control_1			- 0
+	DC.B	$31		; control_2			- 1
+	DC.B	$00		; control_3			- 2
+	DC.B	$30		; control_4			- 3
+	DC.B	$00		; status			- 4
+	DC.B	$26		; refresh_interval	- 5
+	DC.W	$00B3	; gio_config		- 6
+	DC.L	$000040	; display_start		- 8
+	DC.L	$000100	; half_row_inc		- 12
+	DC.L	$0000a0	; display_pitch		- 16 *
+	DC.B	$7F		; CAS_mask			- 20
+	DC.B	$00		; horiz_latency		- 21
+	DC.W	$0014	; horiz_end_sync	- 22 *
+	DC.W	$002e	; horiz_end_blank	- 24 *
+	DC.W	$00ce	; horiz_start_blank	- 26 *
+	DC.W	$00d0	; horiz_total		- 28 *
+	DC.W	$0000	; horiz_half_line	- 30
+	DC.W	$0000	; horiz_count_load	- 32
+	DC.B	$02		; vert_end_sync		- 34 *
+	DC.B	$24		; vert_end_blank	- 35 *
+	DC.W	$0424	; vert_start_blank	- 36 *
+	DC.W	$0427	; vert_total		- 38 *
+	DC.W	$0000	; vert_count_load	- 40
+	DC.W	$037A	; vert_int_line		- 42
+	DC.W	$0040	; gio_reg			- 44 * = pix over 8($c000), 24 bit pixels($0E80(, 57mhz($0015)
+	DC.B	$01		; y_zoom			- 46
+	DC.B	$00		; soft_reg			- 47
+	endp
+	
+venus11x8	proc	export
+	; Table 1	1152 X 870 75Hz
+	DC.B	$01		; control_1			- 0
+	DC.B	$31		; control_2			- 1
+	DC.B	$00		; control_3			- 2
+	DC.B	$30		; control_4			- 3
+	DC.B	$00		; status			- 4
+	DC.B	$26		; refresh_interval	- 5
+	DC.W	$00B3	; gio_config		- 6
+	DC.L	$000040	; display_start		- 8
+	DC.L	$000100	; half_row_inc		- 12
+	DC.L	$000120	; display_pitch		- 16 *
+	DC.B	$7F		; CAS_mask			- 20
+	DC.B	$06		; horiz_latency		- 21
+	DC.W	$000E	; horiz_end_sync	- 22 *
+;	DC.W	$001E	; horiz_end_blank	- 24 *
+;	DC.W	$00AE	; horiz_start_blank	- 26 *
+;	DC.W	$00B6	; horiz_total		- 28 *
+	DC.W	$001D	; horiz_end_blank	- 24 *
+	DC.W	$00AD	; horiz_start_blank	- 26 *
+	DC.W	$00B4	; horiz_total		- 28 *
+	DC.W	$0000	; horiz_half_line	- 30
+	DC.W	$0000	; horiz_count_load	- 32
+	DC.B	$02		; vert_end_sync		- 34 *
+	DC.B	$29		; vert_end_blank	- 35 *
+	DC.W	$038F	; vert_start_blank	- 36 *
+	DC.W	$0392	; vert_total		- 38 *
+	DC.W	$0000	; vert_count_load	- 40
+	DC.W	$0378	; vert_int_line		- 42
+	DC.W	$0040	; gio_reg			- 44 * = pix over 8($C000), 24 bit pixels($0E80(, 100mhz($0019)
+	DC.B	$01		; y_zoom			- 46
+	DC.B	$00		; soft_reg			- 47
+	endp
+	
+	; Table 2	1024 X 768 75Hz
+venus10x7_75	proc	export
+	DC.B	$01		; control_1			- 0
+	DC.B	$31		; control_2			- 1
+	DC.B	$00		; control_3			- 2
+	DC.B	$30		; control_4			- 3
+	DC.B	$00		; status			- 4
+	DC.B	$26		; refresh_interval	- 5
+	DC.W	$00B3	; gio_config		- 6
+	DC.L	$000040	; display_start		- 8
+	DC.L	$000100	; half_row_inc		- 12
+	DC.L	$000120	; display_pitch		- 16 *
+	DC.B	$7F		; CAS_mask			- 20
+	DC.B	$08		; horiz_latency		- 21
+	DC.W	$0008	; horiz_end_sync	- 22 *
+	DC.W	$001A	; horiz_end_blank	- 24 *
+	DC.W	$009A	; horiz_start_blank	- 26 *
+	DC.W	$00A4	; horiz_total		- 28 *
+	DC.W	$0000	; horiz_half_line	- 30
+	DC.W	$0000	; horiz_count_load	- 32
+	DC.B	$02		; vert_end_sync		- 34 *
+	DC.B	$1F		; vert_end_blank	- 35 *
+	DC.W	$031F	; vert_start_blank	- 36 *
+	DC.W	$0322	; vert_total		- 38 *
+	DC.W	$0000	; vert_count_load	- 40
+	DC.W	$0302	; vert_int_line		- 42
+	DC.W	$0040	; gio_reg			- 44 * = pix over 8($C000), 24 bit pixels($0E80(, 80mhz($0017)
+	DC.B	$01		; y_zoom			- 46
+	DC.B	$00		; soft_reg			- 47
+	endp
+	
+	; Table 3	1024 X 768 60Hz
+venus10x7_60	proc	export
+	DC.B	$01		; control_1			- 0
+	DC.B	$31		; control_2			- 1
+	DC.B	$00		; control_3			- 2
+	DC.B	$30		; control_4			- 3
+	DC.B	$00		; status			- 4
+	DC.B	$26		; refresh_interval	- 5
+	DC.W	$00B3	; gio_config		- 6
+	DC.L	$000040	; display_start		- 8
+	DC.L	$000100	; half_row_inc		- 12
+	DC.L	$000120	; display_pitch		- 16 *
+	DC.B	$7F		; CAS_mask			- 20
+	DC.B	$07		; horiz_latency		- 21
+	DC.W	$000A	; horiz_end_sync	- 22 *
+	DC.W	$001A	; horiz_end_blank	- 24 *
+	DC.W	$009A	; horiz_start_blank	- 26 *
+	DC.W	$00A2	; horiz_total		- 28 *
+	DC.W	$0000	; horiz_half_line	- 30
+	DC.W	$0000	; horiz_count_load	- 32
+	DC.B	$05		; vert_end_sync		- 34 *
+	DC.B	$26		; vert_end_blank	- 35 *
+	DC.W	$0326	; vert_start_blank	- 36 *
+	DC.W	$032C	; vert_total		- 38 *
+	DC.W	$0000	; vert_count_load	- 40
+	DC.W	$0320	; vert_int_line		- 42
+	DC.W	$0040	; gio_reg			- 44 * = pix over 8($C000), 24 bit pixels($0E80(, 64mhz($0016)
+	DC.B	$01		; y_zoom			- 46
+	DC.B	$00		; soft_reg			- 47
+	endp
+	
+	; Table 4	832 X 624
+venus8x6	proc	export
+	DC.B	$01		; control_1			- 0
+	DC.B	$31		; control_2			- 1
+	DC.B	$00		; control_3			- 2
+	DC.B	$30		; control_4			- 3
+	DC.B	$00		; status			- 4
+	DC.B	$26		; refresh_interval	- 5
+	DC.W	$00B3	; gio_config		- 6
+	DC.L	$000040	; display_start		- 8
+	DC.L	$000100	; half_row_inc		- 12
+	DC.L	$000120	; display_pitch		- 16 *
+	DC.B	$7F		; CAS_mask			- 20
+	DC.B	$0a		; horiz_latency		- 21
+	DC.W	$0006	; horiz_end_sync	- 22 *
+	DC.W	$0022	; horiz_end_blank	- 24 *
+	DC.W	$008a	; horiz_start_blank	- 26 *
+;	DC.W	$0090	; horiz_total		- 28 *
+	DC.W	$008E	; horiz_total		- 28 *
+	DC.W	$0000	; horiz_half_line	- 30
+	DC.W	$0000	; horiz_count_load	- 32
+	DC.B	$02		; vert_end_sync		- 34 *
+	DC.B	$29		; vert_end_blank	- 35 *
+	DC.W	$0299	; vert_start_blank	- 36 *
+	DC.W	$029A	; vert_total		- 38 *
+	DC.W	$0000	; vert_count_load	- 40
+	DC.W	$0290	; vert_int_line		- 42
+	DC.W	$0040	; gio_reg			- 44 * = pix over 8($C000), 24 bit pixels($0E80(, 50mhz($0014)
+	DC.B	$01		; y_zoom			- 46
+	DC.B	$00		; soft_reg			- 47
+	endp
+	
+	; Table 5	640 X 480 67hz
+venus6x4	proc	export
+	DC.B	$01		; control_1			- 0
+	DC.B	$31		; control_2			- 1
+	DC.B	$00		; control_3			- 2
+	DC.B	$30		; control_4			- 3
+	DC.B	$00		; status			- 4
+	DC.B	$26		; refresh_interval	- 5
+	DC.W	$00B3	; gio_config		- 6
+	DC.L	$000040	; display_start		- 8
+	DC.L	$000100	; half_row_inc		- 12
+	DC.L	$000120	; display_pitch		- 16 *
+	DC.B	$7F		; CAS_mask			- 20
+	DC.B	$0d		; horiz_latency		- 21
+	DC.W	$0006	; horiz_end_sync	- 22 *
+	DC.W	$0012	; horiz_end_blank	- 24 *
+	DC.W	$0062	; horiz_start_blank	- 26 *
+	DC.W	$006A	; horiz_total		- 28 *
+	DC.W	$0000	; horiz_half_line	- 30
+	DC.W	$0000	; horiz_count_load	- 32
+	DC.B	$02		; vert_end_sync		- 34 *
+	DC.B	$29		; vert_end_blank	- 35 *
+	DC.W	$0209	; vert_start_blank	- 36 *
+	DC.W	$020C	; vert_total		- 38 *
+	DC.W	$0000	; vert_count_load	- 40
+	DC.W	$0209	; vert_int_line		- 42
+	DC.W	$0040	; gio_reg			- 44 * = pix over 8($C000), 24 bit pixels($0E80(, 30mhz($0014)
+	DC.B	$01		; y_zoom			- 46
+	DC.B	$00		; soft_reg			- 47
+	endp
+	
+	; Table 6	640 X 870
+venus6x8	proc	export
+	DC.B	$01		; control_1			- 0
+	DC.B	$31		; control_2			- 1
+	DC.B	$00		; control_3			- 2
+	DC.B	$30		; control_4			- 3
+	DC.B	$00		; status			- 4
+	DC.B	$26		; refresh_interval	- 5
+	DC.W	$00B3	; gio_config		- 6
+	DC.L	$000040	; display_start		- 8
+	DC.L	$000100	; half_row_inc		- 12
+	DC.L	$000120	; display_pitch		- 16 *
+	DC.B	$7F		; CAS_mask			- 20
+	DC.B	$0a		; horiz_latency		- 21
+	DC.W	$0008	; horiz_end_sync	- 22 *
+	DC.W	$0010	; horiz_end_blank	- 24 *
+	DC.W	$0060	; horiz_start_blank	- 26 *
+	DC.W	$0066	; horiz_total		- 28 *
+	DC.W	$0000	; horiz_half_line	- 30
+	DC.W	$0000	; horiz_count_load	- 32
+	DC.B	$02		; vert_end_sync		- 34 *
+	DC.B	$2C		; vert_end_blank	- 35 *
+	DC.W	$0392	; vert_start_blank	- 36 *
+	DC.W	$0395	; vert_total		- 38 *
+	DC.W	$0000	; vert_count_load	- 40
+	DC.W	$037A	; vert_int_line		- 42
+	DC.W	$0040	; gio_reg			- 44 * = pix over 8($c000), 24 bit pixels($0E80(, 57mhz($0015)
+	DC.B	$01		; y_zoom			- 46
+	DC.B	$00		; soft_reg			- 47
+	endp
+	
+	end
