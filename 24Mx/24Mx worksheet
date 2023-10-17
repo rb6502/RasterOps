@@ -1,0 +1,170 @@
+
+############################################################
+#  24Mx 
+#  ROM
+#  64k
+#  defs: MAKINGGENERIC, MAKINGMT
+############################################################
+#execute {MPW}AztecStartup
+#C -E200 "+BU" "+I{MPW}azAll:all.h" Lane3ROMtail.c
+C -dMAKING24MXI=1 -dMAKINGGENERIC=0 -E200 "+BU" "+2" 24Mxbm.c
+ln 24Mxbm.o "+d" -o ROM.24Mxbm
+delete 24Mxbm.o
+s1tool ROM.24Mxbm -27512 -b0 #-b8000    #use -b0 when using 512K  rom
+beep
+# - Base: 000000   Code: 002722  Data: 000000  Udata: 000000  Total: 002722
+# - Byte count = 10018
+# - Starting at = 0000
+#execute {MPW}AztecStartup
+C -dMAKING24MXI=1 -dMAKINGGENERIC=0 -E200 "+BU" "+2" "+I{AZTEC}azAll:all.h" 24Mxw.c
+ln 24Mxw.o "+d" -o ROM.24Mx -lc {MPW}MyScripts:Lane3ROMtail.o
+delete 24Mxw.o
+s1tool ROM.24Mx -27512
+beep
+# - Base: 000000   Code: 0073c2  Data: 000000  Udata: 000000  Total: 0073c2
+# - Byte count = 29634
+# - Starting at = 8C3E
+Use 27C512 EPROM.
+# send to PROMice EPROM Emulator
+LoadICE -b 19200 -v -f ff -r 27512 -w 8  -l ROM.24Mx.S1.64K
+LoadICE -b 19200 -v       -r 27512 -w 8  -l ROM.24Mxbm.S1.64K
+DownLoad512 ROM.24Mx.S1.64K		#download this first
+DownLoadbm512 ROM.24Mxbm.S1.64K	#download this last
+beep
+Burn
+############################################################
+#  24MxTV  
+#  ROM
+#  64k
+#  defs: MAKINGGENERIC, MAKINGMT
+############################################################
+#execute {MPW}AztecStartup
+#C -E200 "+BU" "+I{MPW}azAll:all.h" Lane3ROMtail.c
+C -dMAKING24MXTV=1 -dMAKINGGENERIC=0 -E200 "+BU" "+2" 24Mxbm.c
+ln 24Mxbm.o "+d" -o ROM.24MxTVbm
+delete 24Mxbm.o
+s1tool ROM.24MxTVbm -27512 -b0 #-b8000    #use -b0 when using 512K  rom
+beep
+# - Base: 000000   Code: 002c0c  Data: 000000  Udata: 000000  Total: 002c0c
+# - Byte count = 11276
+# - Starting at = 0000
+#execute {MPW}AztecStartup
+C -dMAKING24MXTV=1 -dMAKINGGENERIC=0 -E200 "+BU" "+2" "+I{AZTEC}azAll:all.h" 24Mxw.c
+ln 24Mxw.o "+d" -o ROM.24MxTV -lc {MPW}MyScripts:Lane3ROMtail.o
+delete 24Mxw.o
+s1tool ROM.24MxTV -27512
+beep
+# - Base: 000000   Code: 007e70  Data: 000000  Udata: 000000  Total: 007e70
+# - Byte count = 32368
+# - Starting at = 8190
+# send to PROMice EPROM Emulator
+LoadICE -b 19200 -v -f ff -r 27512 -w 8  -l ROM.24MxTV.S1.64K
+LoadICE -b 19200 -v       -r 27512 -w 8  -l ROM.24MxTVbm.S1.64K
+DownLoad512 ROM.24MxTV.S1.64K		#download this first
+DownLoadbm512 ROM.24MxTVbm.S1.64K	#download this last
+beep
+Burn
+############################################################
+#  24MxRGB  
+#  ROM
+#  64k
+#  defs: MAKINGGENERIC, MAKINGMT
+############################################################
+#execute {MPW}AztecStartup
+C -dMAKING24MXTV=1 -dMAKING24MXRGB=1 -dMAKINGGENERIC=0 -E200 "+BU" "+2" 24Mxbm.c
+ln 24Mxbm.o "+d" -o ROM.24MxRGBbm
+delete 24Mxbm.o
+s1tool ROM.24MxRGBbm -27512 -b0 #-b8000    #use -b0 when using 512K  rom
+beep
+# - Base: 000000   Code: 002c3c  Data: 000000  Udata: 000000  Total: 002c3c
+# - Byte count = 11324
+# - Starting at = 0000
+#execute {MPW}AztecStartup
+C -dMAKING24MXTV=1 -dMAKING24MXRGB=1 -dMAKINGGENERIC=0 -E200 "+BU" "+2" "+I{AZTEC}azAll:all.h" 24Mxw.c
+ln 24Mxw.o "+d" -o ROM.24MxRGB -lc {MPW}MyScripts:Lane3ROMtail.o
+delete 24Mxw.o
+s1tool ROM.24MxRGB -27512
+beep
+# - Base: 000000   Code: 007eaa  Data: 000000  Udata: 000000  Total: 007eaa
+# - Byte count = 32426
+# - Starting at = 8156
+# send to PROMice EPROM Emulator
+LoadICE -b 19200 -v -f ff -r 27512 -w 8  -l ROM.24MxRGB.S1.64K
+LoadICE -b 19200 -v       -r 27512 -w 8  -l ROM.24MxRGBbm.S1.64K
+DownLoad512 ROM.24MxRGB.S1.64K		#download this first
+DownLoadbm512 ROM.24MxRGBbm.S1.64K	#download this last
+beep
+Burn
+############################################################
+#  24Mx  
+#  RAM
+#  32k, 64k
+#  defs: MAKINGGENERIC, MAKINGMT
+############################################################
+#execute {MPW}AztecStartup
+C -dMAKING24MXI=1 -dMAKINGGENERIC=0 -E200 "+BU" "+2" 24Mxbm.c
+ln 24Mxbm.o "+d" -o ROM.24Mxbm
+delete 24Mxbm.o
+s1tool ROM.24Mxbm -27512 -b0 -s6
+#execute {MPW}AztecStartup
+C -dMAKING24MXI=1 -dMAKINGGENERIC=0 -dTESTING=0 -E200 "+BU" "+2" "+I{AZTEC}azAll:all.h" 24Mxw.c
+ln 24Mxw.o "+d" -o ROM.24Mx -lc {MPW}MyScripts:Lane3ROMtail.o
+delete 24Mxw.o
+s1tool ROM.24Mx -27512 -s6
+shutdown -n -r
+mm32 -32 fefc0000 -c=32 -i=1
+mm32 -32 fefc5dc8 -c=32 -i=1
+############################################################
+#  24MxTV  
+#  RAM
+#  32k, 64k
+#  defs: MAKINGGENERIC, MAKINGMT
+############################################################
+execute {MPW}AztecStartup
+C -dMAKING24MXTV=1 -E200 "+BU" "+2" 24Mxbm.c
+ln 24Mxbm.o "+d" -o ROM.24MxTVbm
+delete 24Mxbm.o
+#s1tool ROM.24MxTVbm -27256 -b8000 -s6
+s1tool ROM.24MxTVbm -27512 -b0 -s6
+beep
+execute {MPW}AztecStartup
+C -dMAKING24MXTV=1 -E200 "+BU" "+2" "+I{MPW}azAll:all.h" 24Mxw.c
+ln 24Mxw.o "+d" -o ROM.24MxTV -lc {MPW}MyScripts:Lane3ROMtail.o
+delete 24Mxw.o
+#s1tool ROM.24MxTV -27256 -s6
+s1tool ROM.24MxTV -27512 -s6
+beep
+shutdown -n -r
+############################################################
+#  24MxTV interrupt code 
+############################################################
+execute {MPW}Aztec3.6:AztecStartup
+C -dMAKING24MXTV=1 -E200 "+BU" "+2" "+I{MPW}Aztec3.6:azAll:all.h" Init.c
+ln Init.o "+d" -o Init.drvr
+dumpcode -rt DRVR Init.drvr > tmp
+execute {MPW}Aztec3.6:AztecStartup
+C -A -dMAKING24MXTV=1 -E200 "+BU" "+2" "+I{MPW}Aztec3.6:azAll:all.h" Init.c
+#####################
+mm32 -32 feff0000 01 
+mm32 -32 fefe0000 23 
+mm32 -32 fefd0000 45 
+mm32 -32 fefc0000 67 
+mm32 -32 feff0000
+mm32 -32 fefe0000  
+mm32 -32 fefd0000  
+mm32 -32 fefc0000  
+mm32 -32 fefa0018 0000003a -v
+  FEFA0018  0000003A
+  FEFA0018  00000032
+mm32 -32 fe000000 000000 -v
+  FE000000  80008000
+  FE000000  00000000
+  FE000000  80008000
+mm32 -32 fed000c4 c0 -v
+mm32 -32 fefc0000 -c=32 -i=1
+mm32 -32 fefc5dc8 -c=32 -i=1
+execute {MPW}Aztec3.6:AztecStartup
+C -dMAKING24MXTV=1 -E200 "+BU" "+2" "+I{MPW}azAll:all.h" Init.c
+ln Init.o "+d" -o Init.drvr
+help dumpcode
+dumpcode -rt DRVR Init.drvr > tmp

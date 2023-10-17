@@ -1,0 +1,1 @@
+This is for the 24Mx, the 24MxRGB, and the 24MxTV cards.

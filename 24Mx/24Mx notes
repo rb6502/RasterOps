@@ -1,0 +1,23 @@
+Notes
+- converted from 24XL.41.c as 24Mx.1.c
+- changes:
+	- HalfRow = $80
+	- CasMask = $3f
+	- Pitch = $d0
+	- RamSize=11 (bitnary) in control_1
+	- resources 0x83 - 0x8c
+log
+11/27/91
+- convert from 24XL code
+12/2/91
+- put in board name on boot screen
+- fixed extended desktop resources+code
+- 24MxTV doesn't work with accelerator (2.7)
+1/7/92
+- deleted 6x7 resolution, cannot support that as we have only 0.5 meg memeory
+- fixed cycling
+4/21/92
+- changed cycling time from 3 to 4 seconds
+- released 24MxTV 1.0a, source is 24Mx3.0.c
+5/8/92
+- changes in setmode call, when changing from 16 or 24bit mode to 8bit or less, want to turn off pip. Source is 3.1c.
