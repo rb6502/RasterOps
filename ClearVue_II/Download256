@@ -1,0 +1,6 @@
+# Send File passed on Parameter line to PROM Burner for 27C256 PROM
+append prom256.head {1}> prom.exe
+modem -b9 -e -s < prom.exe >> {Worksheet}
+delete prom.exe
+#  Burn again
+# modem -b9 -n -e 'PP:'

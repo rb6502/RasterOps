@@ -1,0 +1,4 @@
+# Send File passed on Parameter line to PROM Burner for 27C64 PROM
+append prom64.head {1}> prom.exe
+modem -b9 -e -s < prom.exe >> {Worksheet}
+delete prom.exe
